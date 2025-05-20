@@ -1,0 +1,119 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="order-form">
+    <h1><%= isNew ? 'New Order' : 'Edit Order' %></h1>
+
+    <form action="/staff/order/save" method="POST" id="orderForm">
+        <div class="form-group">
+            <label for="tableNumber">Table Number:</label>
+            <input type="number" id="tableNumber" name="tableNumber" value="<%= order ? order.TableNumber : '' %>" required min="1" max="20">
+        </div>
+
+        <div class="form-group">
+            <label for="status">Status:</label>
+            <select id="status" name="status" required>
+                <option value="Placed" <%= order && order.Status === 'Placed' ? 'selected' : '' %>>Placed</option>
+                <option value="Preparing" <%= order && order.Status === 'Preparing' ? 'selected' : '' %>>Preparing</option>
+                <option value="Ready for Service" <%= order && order.Status === 'Ready for Service' ? 'selected' : '' %>>Ready for Service</option>
+                <option value="Served" <%= order && order.Status === 'Served' ? 'selected' : '' %>>Served</option>
+                <option value="Paid" <%= order && order.Status === 'Paid' ? 'selected' : '' %>>Paid</option>
+                <option value="Cancelled" <%= order && order.Status === 'Cancelled' ? 'selected' : '' %>>Cancelled</option>
+            </select>
+        </div>
+
+        <div class="order-items">
+            <h2>Order Items</h2>
+            <div id="itemsContainer">
+                <% if (order && order.items) { %>
+                    <% order.items.forEach((item, index) => { %>
+                        <div class="order-item">
+                            <select name="items[<%= index %>][menuItemId]" required>
+                                <% menuItems.forEach(menuItem => { %>
+                                    <option value="<%= menuItem.MenuItemID %>" 
+                                            data-price="<%= menuItem.Price %>"
+                                            <%= item.MenuItemID === menuItem.MenuItemID ? 'selected' : '' %>>
+                                        <%= menuItem.Name %> - $<%= menuItem.Price.toFixed(2) %>
+                                    </option>
+                                <% }); %>
+                            </select>
+                            <input type="number" name="items[<%= index %>][quantity]" value="<%= item.Quantity %>" min="1" required>
+                            <input type="text" name="items[<%= index %>][specialRequests]" value="<%= item.SpecialRequests %>" placeholder="Special requests">
+                            <input type="hidden" name="items[<%= index %>][price]" value="<%= item.Price %>">
+                            <button type="button" class="remove-item">Remove</button>
+                        </div>
+                    <% }); %>
+                <% } %>
+            </div>
+            <button type="button" id="addItem" class="button">Add Item</button>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="submit-button">Save Order</button>
+            <a href="/staff/orders" class="button">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const itemsContainer = document.getElementById('itemsContainer');
+    const addItemButton = document.getElementById('addItem');
+    const menuItems = <%- JSON.stringify(menuItems) %>;
+    let itemCount = <%= order && order.items ? order.items.length : 0 %>;
+
+    function createItemElement() {
+        const div = document.createElement('div');
+        div.className = 'order-item';
+        div.innerHTML = `
+            <select name="items[${itemCount}][menuItemId]" required>
+                ${menuItems.map(item => `
+                    <option value="${item.MenuItemID}" data-price="${item.Price}">
+                        ${item.Name} - $${item.Price.toFixed(2)}
+                    </option>
+                `).join('')}
+            </select>
+            <input type="number" name="items[${itemCount}][quantity]" value="1" min="1" required>
+            <input type="text" name="items[${itemCount}][specialRequests]" placeholder="Special requests">
+            <input type="hidden" name="items[${itemCount}][price]" value="${menuItems[0].Price}">
+            <button type="button" class="remove-item">Remove</button>
+        `;
+
+        // Add event listener for price update
+        const select = div.querySelector('select');
+        select.addEventListener('change', function() {
+            const price = this.options[this.selectedIndex].dataset.price;
+            this.parentElement.querySelector('input[name$="[price]"]').value = price;
+        });
+
+        // Add event listener for remove button
+        div.querySelector('.remove-item').addEventListener('click', function() {
+            div.remove();
+        });
+
+        return div;
+    }
+
+    addItemButton.addEventListener('click', function() {
+        itemsContainer.appendChild(createItemElement());
+        itemCount++;
+    });
+
+    // Add event listeners to existing remove buttons
+    document.querySelectorAll('.remove-item').forEach(button => {
+        button.addEventListener('click', function() {
+            this.parentElement.remove();
+        });
+    });
+
+    // Add event listeners to existing selects for price updates
+    document.querySelectorAll('.order-item select').forEach(select => {
+        select.addEventListener('change', function() {
+            const price = this.options[this.selectedIndex].dataset.price;
+            this.parentElement.querySelector('input[name$="[price]"]').value = price;
+        });
+    });
+});
+</script>
+
+<%- include('../partials/footer') %> 

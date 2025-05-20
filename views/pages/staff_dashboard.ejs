@@ -1,0 +1,84 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="dashboard">
+    <h1>Staff Dashboard</h1>
+    
+    <section class="today-reservations">
+        <h2>Today's Reservations</h2>
+        <% if (reservations.length === 0) { %>
+            <p>No reservations for today.</p>
+        <% } else { %>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Customer</th>
+                        <th>Guests</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% reservations.forEach(reservation => { %>
+                        <tr>
+                            <td><%= new Date(reservation.DateTime).toLocaleTimeString() %></td>
+                            <td><%= reservation.CustomerName %></td>
+                            <td><%= reservation.NumberOfGuests %></td>
+                            <td><%= reservation.Status %></td>
+                            <td>
+                                <form action="/staff/reservation/update_status/<%= reservation.ReservationID %>" method="POST">
+                                    <select name="status" onchange="this.form.submit()">
+                                        <option value="Confirmed" <%= reservation.Status === 'Confirmed' ? 'selected' : '' %>>Confirmed</option>
+                                        <option value="Seated" <%= reservation.Status === 'Seated' ? 'selected' : '' %>>Seated</option>
+                                        <option value="Completed" <%= reservation.Status === 'Completed' ? 'selected' : '' %>>Completed</option>
+                                        <option value="Cancelled" <%= reservation.Status === 'Cancelled' ? 'selected' : '' %>>Cancelled</option>
+                                        <option value="No-Show" <%= reservation.Status === 'No-Show' ? 'selected' : '' %>>No-Show</option>
+                                    </select>
+                                </form>
+                            </td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        <% } %>
+    </section>
+
+    <section class="active-orders">
+        <h2>Today's Orders</h2>
+        <% if (orders.length === 0) { %>
+            <p>No active orders for today.</p>
+        <% } else { %>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Table</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% orders.forEach(order => { %>
+                        <tr>
+                            <td><%= new Date(order.OrderDateTime).toLocaleTimeString() %></td>
+                            <td><%= order.TableNumber %></td>
+                            <td><%= order.Status %></td>
+                            <td>$<%= order.TotalPrice.toFixed(2) %></td>
+                            <td>
+                                <a href="/staff/order/edit/<%= order.OrderID %>" class="button">Edit</a>
+                            </td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        <% } %>
+        
+        <div class="actions">
+            <a href="/staff/order/new" class="button">New Order</a>
+        </div>
+    </section>
+</div>
+
+<%- include('../partials/footer') %> 

@@ -1,0 +1,45 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="manage-orders">
+    <h1>Manage Orders</h1>
+    
+    <div class="actions">
+        <a href="/staff/order/new" class="button">New Order</a>
+    </div>
+
+    <% if (orders.length === 0) { %>
+        <p>No orders found.</p>
+    <% } else { %>
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Table</th>
+                    <th>Staff</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% orders.forEach(order => { %>
+                    <tr>
+                        <td><%= new Date(order.OrderDateTime).toLocaleDateString() %></td>
+                        <td><%= new Date(order.OrderDateTime).toLocaleTimeString() %></td>
+                        <td><%= order.TableNumber %></td>
+                        <td><%= order.StaffName %></td>
+                        <td><%= order.Status %></td>
+                        <td>$<%= order.TotalPrice.toFixed(2) %></td>
+                        <td>
+                            <a href="/staff/order/edit/<%= order.OrderID %>" class="button">Edit</a>
+                        </td>
+                    </tr>
+                <% }); %>
+            </tbody>
+        </table>
+    <% } %>
+</div>
+
+<%- include('../partials/footer') %> 

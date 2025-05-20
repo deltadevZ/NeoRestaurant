@@ -1,0 +1,24 @@
+<%- include('../partials/header') %>
+
+<div class="confirmation">
+    <h1>Reservation Confirmed!</h1>
+    
+    <div class="reservation-details">
+        <h2>Reservation Details</h2>
+        <p><strong>Name:</strong> <%= reservation.Name %></p>
+        <p><strong>Date:</strong> <%= new Date(reservation.DateTime).toLocaleDateString() %></p>
+        <p><strong>Time:</strong> <%= new Date(reservation.DateTime).toLocaleTimeString() %></p>
+        <p><strong>Number of Guests:</strong> <%= reservation.NumberOfGuests %></p>
+        <p><strong>Reservation ID:</strong> <%= reservation.ReservationID %></p>
+    </div>
+
+    <div class="next-steps">
+        <h3>What's Next?</h3>
+        <p>We look forward to serving you! Please arrive 5-10 minutes before your reservation time.</p>
+        <p>If you need to modify or cancel your reservation, please call us at (555) 123-4567.</p>
+    </div>
+
+    <a href="/" class="home-button">Return to Home</a>
+</div>
+
+<%- include('../partials/footer') %> 
