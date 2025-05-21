@@ -1,5 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const bcrypt = require('bcryptjs');
 
 // Create/connect to the database
 const db = new sqlite3.Database(path.join(__dirname, 'restaurant.db'), (err) => {
@@ -44,7 +45,7 @@ const createTables = () => {
             StaffID INTEGER NOT NULL,
             TableNumber INTEGER NOT NULL,
             OrderDateTime TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-            Status TEXT NOT NULL DEFAULT 'Placed' CHECK(Status IN ('Placed', 'Preparing', 'Ready for Service', 'Served', 'Paid', 'Cancelled')),
+            Status TEXT NOT NULL DEFAULT 'Placed' CHECK(Status IN ('Placed', 'Ready for Kitchen', 'Preparing', 'Ready for Service', 'Served', 'Paid', 'Cancelled')),
             TotalPrice REAL NOT NULL DEFAULT 0.00,
             FOREIGN KEY(ReservationID) REFERENCES RESERVATIONS(ReservationID),
             FOREIGN KEY(StaffID) REFERENCES STAFF(StaffID)
@@ -65,6 +66,37 @@ const createTables = () => {
             Subtotal REAL NOT NULL,
             FOREIGN KEY(OrderID) REFERENCES ORDERS(OrderID),
             FOREIGN KEY(MenuItemID) REFERENCES MENU_ITEMS(MenuItemID)
+        )`,
+        `CREATE TABLE IF NOT EXISTS INVENTORY_ITEMS (
+            ItemID INTEGER PRIMARY KEY AUTOINCREMENT,
+            ItemName TEXT NOT NULL UNIQUE,
+            Description TEXT,
+            QuantityOnHand INTEGER NOT NULL DEFAULT 0,
+            Unit TEXT,
+            ReorderLevel INTEGER NOT NULL DEFAULT 0,
+            SupplierID INTEGER,
+            FOREIGN KEY(SupplierID) REFERENCES SUPPLIERS(SupplierID)
+        )`,
+        `CREATE TABLE IF NOT EXISTS SUPPLIERS (
+            SupplierID INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            ContactPerson TEXT,
+            Phone TEXT,
+            Email TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS SHIFTS (
+            ShiftID INTEGER PRIMARY KEY AUTOINCREMENT,
+            StartDateTime TEXT NOT NULL,
+            EndDateTime TEXT NOT NULL,
+            RoleRequired TEXT CHECK(RoleRequired IN ('Manager', 'Waiter', 'Chef', NULL))
+        )`,
+        `CREATE TABLE IF NOT EXISTS STAFF_SHIFTS (
+            StaffShiftID INTEGER PRIMARY KEY AUTOINCREMENT,
+            StaffID INTEGER NOT NULL,
+            ShiftID INTEGER NOT NULL,
+            ManagerApprovalStatus TEXT NOT NULL DEFAULT 'Pending' CHECK(ManagerApprovalStatus IN ('Pending', 'Approved', 'Denied')),
+            FOREIGN KEY(StaffID) REFERENCES STAFF(StaffID),
+            FOREIGN KEY(ShiftID) REFERENCES SHIFTS(ShiftID)
         )`
     ];
 
@@ -80,11 +112,11 @@ const createTables = () => {
 
 // Insert sample data
 const insertSampleData = () => {
-    // WARNING: These are plain text passwords for development only!
-    // In production, use bcrypt.js for password hashing
+    // Hash passwords for sample staff accounts
     const staffData = [
-        ['John Manager', 'manager', 'Manager', 'password123'],
-        ['Alice Waiter', 'waiter1', 'Waiter', 'password123']
+        ['John Manager', 'manager', 'Manager', bcrypt.hashSync('password123', 10)],
+        ['Alice Waiter', 'waiter1', 'Waiter', bcrypt.hashSync('password123', 10)],
+        ['Bob Chef', 'chef1', 'Chef', bcrypt.hashSync('password123', 10)]
     ];
 
     const menuItems = [
@@ -96,6 +128,22 @@ const insertSampleData = () => {
         ['Tiramisu', 'Classic Italian dessert', 8.99, 'Dessert'],
         ['House Wine', 'Red wine, glass', 6.99, 'Beverage'],
         ['Sparkling Water', 'Bottled sparkling water', 3.99, 'Beverage']
+    ];
+
+    // Sample inventory items
+    const inventoryItems = [
+        ['Romaine Lettuce', 'Fresh romaine lettuce heads', 20, 'piece', 5],
+        ['Olive Oil', 'Extra virgin olive oil', 10, 'bottle', 2],
+        ['Salmon Fillet', 'Fresh salmon fillets', 15, 'piece', 5],
+        ['Beef Steak', 'Premium ribeye steaks', 25, 'piece', 8],
+        ['Chocolate', 'Dark chocolate for desserts', 5, 'kg', 1]
+    ];
+
+    // Sample suppliers
+    const suppliers = [
+        ['Fresh Produce Co.', 'John Smith', '555-0101', 'john@freshproduce.com'],
+        ['Ocean Seafood', 'Sarah Lee', '555-0102', 'sarah@oceanseafood.com'],
+        ['Premium Meats', 'Mike Johnson', '555-0103', 'mike@premiummeats.com']
     ];
 
     return Promise.all([
@@ -124,6 +172,32 @@ const insertSampleData = () => {
                     }
                 );
             });
+        }),
+        // Insert suppliers
+        ...suppliers.map(supplier => {
+            return new Promise((resolve, reject) => {
+                db.run(
+                    'INSERT OR IGNORE INTO SUPPLIERS (Name, ContactPerson, Phone, Email) VALUES (?, ?, ?, ?)',
+                    supplier,
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+        }),
+        // Insert inventory items
+        ...inventoryItems.map(item => {
+            return new Promise((resolve, reject) => {
+                db.run(
+                    'INSERT OR IGNORE INTO INVENTORY_ITEMS (ItemName, Description, QuantityOnHand, Unit, ReorderLevel) VALUES (?, ?, ?, ?, ?)',
+                    item,
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
         })
     ]);
 };
@@ -138,8 +212,12 @@ const setupDatabase = async () => {
         console.log('Sample data inserted successfully.');
         
         console.log('\nDatabase setup completed successfully!');
-        console.log('\nWARNING: The sample staff accounts use plain text passwords.');
-        console.log('In production, implement proper password hashing using bcrypt.js!');
+        console.log('\nSample staff accounts created with hashed passwords:');
+        console.log('- Username: manager, Password: password123');
+        console.log('- Username: waiter1, Password: password123');
+        console.log('- Username: chef1, Password: password123');
+        console.log('\nNote: These are sample accounts for development only.');
+        console.log('In production, ensure all staff use strong, unique passwords!');
         
         db.close();
     } catch (err) {

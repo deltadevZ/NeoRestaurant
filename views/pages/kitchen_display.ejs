@@ -1,0 +1,166 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="container">
+    <div class="dashboard">
+        <section>
+            <h1 class="page-title">Kitchen Display</h1>
+
+            <% if (error) { %>
+                <div class="error-message">
+                    <%= error %>
+                </div>
+            <% } %>
+
+            <% if (orders.length === 0) { %>
+                <div class="alert alert-info">
+                    No active orders at the moment.
+                </div>
+            <% } else { %>
+                <div class="orders-grid">
+                    <% orders.forEach(order => { %>
+                        <div class="order-card">
+                            <div class="order-header">
+                                <h3>Order #<%= order.OrderID %></h3>
+                                <span class="order-time">
+                                    <%= new Date(order.OrderDateTime).toLocaleTimeString() %>
+                                </span>
+                            </div>
+                            
+                            <div class="order-details">
+                                <p><strong>Table:</strong> <%= order.TableNumber %></p>
+                                <p><strong>Server:</strong> <%= order.StaffName %></p>
+                                <p><strong>Status:</strong> 
+                                    <span class="status-badge status-<%= order.Status.toLowerCase() %>">
+                                        <%= order.Status %>
+                                    </span>
+                                </p>
+                            </div>
+
+                            <div class="order-items">
+                                <h4>Items:</h4>
+                                <ul>
+                                    <% order.items.forEach(item => { %>
+                                        <li>
+                                            <%= item.Quantity %>x <%= item.Name %>
+                                            <% if (item.SpecialRequests) { %>
+                                                <p class="special-request">Note: <%= item.SpecialRequests %></p>
+                                            <% } %>
+                                        </li>
+                                    <% }); %>
+                                </ul>
+                            </div>
+
+                            <div class="order-actions">
+                                <form action="/staff/order/update_kitchen_status/<%= order.OrderID %>" method="POST">
+                                    <select name="status" class="form-control">
+                                        <option value="Placed" <%= order.Status === 'Placed' ? 'selected' : '' %>>Placed</option>
+                                        <option value="Ready for Kitchen" <%= order.Status === 'Ready for Kitchen' ? 'selected' : '' %>>Ready for Kitchen</option>
+                                        <option value="Preparing" <%= order.Status === 'Preparing' ? 'selected' : '' %>>Preparing</option>
+                                        <option value="Ready for Service" <%= order.Status === 'Ready for Service' ? 'selected' : '' %>>Ready for Service</option>
+                                    </select>
+                                    <button type="submit" class="btn btn-primary">Update Status</button>
+                                </form>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } %>
+        </section>
+    </div>
+</div>
+
+<style>
+.orders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1rem;
+    padding: 1rem 0;
+}
+
+.order-card {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    padding: 1rem;
+}
+
+.order-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
+}
+
+.order-time {
+    color: #666;
+    font-size: 0.9rem;
+}
+
+.order-details {
+    margin-bottom: 1rem;
+}
+
+.order-details p {
+    margin: 0.5rem 0;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.status-placed { background: #fff3cd; color: #856404; }
+.status-ready-for-kitchen { background: #cce5ff; color: #004085; }
+.status-preparing { background: #d4edda; color: #155724; }
+.status-ready-for-service { background: #d1ecf1; color: #0c5460; }
+
+.order-items {
+    margin: 1rem 0;
+}
+
+.order-items ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.order-items li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+}
+
+.special-request {
+    font-size: 0.9rem;
+    color: #dc3545;
+    margin: 0.25rem 0 0 1rem;
+}
+
+.order-actions {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.order-actions form {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.order-actions select {
+    flex: 1;
+}
+
+@media (max-width: 768px) {
+    .orders-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<%- include('../partials/footer') %> 

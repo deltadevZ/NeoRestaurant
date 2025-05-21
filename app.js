@@ -3,6 +3,7 @@ const session = require('express-session');
 const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -46,11 +47,10 @@ const requireLogin = (req, res, next) => {
 // Helper function to check table availability
 const checkTableAvailability = (dateTime, numGuests) => {
     return new Promise((resolve, reject) => {
-        // Simple availability check - can be enhanced
         const twoHoursLater = new Date(new Date(dateTime).getTime() + 2 * 60 * 60 * 1000);
         
         db.all(
-            `SELECT * FROM RESERVATIONS 
+            `SELECT TableNumber FROM RESERVATIONS 
             WHERE DateTime BETWEEN ? AND ? 
             AND Status != 'Cancelled' 
             AND Status != 'Completed'`,
@@ -58,17 +58,13 @@ const checkTableAvailability = (dateTime, numGuests) => {
             (err, reservations) => {
                 if (err) reject(err);
                 else {
-                    // Simple logic: assume 10 tables, each seats 4
+                    // Get all tables (1-10)
+                    const allTables = Array.from({length: 10}, (_, i) => i + 1);
+                    // Get occupied tables
                     const occupiedTables = new Set(reservations.map(r => r.TableNumber));
-                    const availableTables = [];
-                    
-                    for (let i = 1; i <= 10; i++) {
-                        if (!occupiedTables.has(i)) {
-                            availableTables.push(i);
-                        }
-                    }
-                    
-                    resolve(availableTables.length > 0);
+                    // Find first available table
+                    const availableTable = allTables.find(table => !occupiedTables.has(table));
+                    resolve(availableTable);
                 }
             }
         );
@@ -97,9 +93,9 @@ app.post('/reserve', async (req, res) => {
     const dateTime = `${date}T${time}:00`;
 
     try {
-        const isAvailable = await checkTableAvailability(dateTime, num_guests);
+        const availableTable = await checkTableAvailability(dateTime, num_guests);
         
-        if (!isAvailable) {
+        if (!availableTable) {
             return res.render('pages/reserve', {
                 date,
                 time,
@@ -129,10 +125,10 @@ app.post('/reserve', async (req, res) => {
 
                     const customerId = this.lastID;
 
-                    // Insert reservation
+                    // Insert reservation with available table
                     db.run(
                         'INSERT INTO RESERVATIONS (CustomerID, TableNumber, DateTime, NumberOfGuests) VALUES (?, ?, ?, ?)',
-                        [customerId, 1, dateTime, num_guests], // Simple table assignment
+                        [customerId, availableTable, dateTime, num_guests],
                         function(err) {
                             if (err) {
                                 db.run('ROLLBACK');
@@ -187,11 +183,9 @@ app.get('/staff/login', (req, res) => {
 app.post('/staff/login', (req, res) => {
     const { username, password } = req.body;
 
-    // WARNING: This is using plain text password comparison!
-    // In production, use bcrypt.js for password hashing and comparison
     db.get(
-        'SELECT * FROM STAFF WHERE Username = ? AND PasswordHash = ?',
-        [username, password],
+        'SELECT * FROM STAFF WHERE Username = ?',
+        [username],
         (err, staff) => {
             if (err || !staff) {
                 return res.render('pages/staff_login', {
@@ -199,8 +193,16 @@ app.post('/staff/login', (req, res) => {
                 });
             }
 
-            req.session.staffId = staff.StaffID;
-            res.redirect('/staff/dashboard');
+            // Compare password with stored hash
+            if (bcrypt.compareSync(password, staff.PasswordHash)) {
+                req.session.staffId = staff.StaffID;
+                req.session.staffRole = staff.Role;
+                res.redirect('/staff/dashboard');
+            } else {
+                res.render('pages/staff_login', {
+                    error: 'Invalid username or password'
+                });
+            }
         }
     );
 });
@@ -253,20 +255,24 @@ app.get('/staff/dashboard', requireLogin, (req, res) => {
 
 // Manage reservations
 app.get('/staff/reservations', requireLogin, (req, res) => {
-    db.all(
-        `SELECT r.*, c.Name as CustomerName 
+    db.all(`
+        SELECT r.*, c.Name as CustomerName 
         FROM RESERVATIONS r 
-        JOIN CUSTOMERS c ON r.CustomerID = c.CustomerID 
-        WHERE r.DateTime >= datetime('now') 
-        ORDER BY r.DateTime`,
-        (err, reservations) => {
-            if (err) {
-                console.error('Error fetching reservations:', err);
-                reservations = [];
-            }
-            res.render('pages/manage_reservations', { reservations });
+        LEFT JOIN CUSTOMERS c ON r.CustomerID = c.CustomerID 
+        ORDER BY r.DateTime DESC
+    `, (err, reservations) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/manage_reservations', { 
+                reservations: [], 
+                error: "Could not fetch reservations." 
+            });
         }
-    );
+        res.render('pages/manage_reservations', { 
+            reservations, 
+            error: null 
+        });
+    });
 });
 
 // Update reservation status
@@ -284,79 +290,181 @@ app.post('/staff/reservation/update_status/:id', requireLogin, (req, res) => {
     );
 });
 
+// Delete reservation
+app.post('/staff/reservation/delete/:id', requireLogin, (req, res) => {
+    const reservationId = req.params.id;
+    
+    // First check if the reservation exists
+    db.get('SELECT * FROM RESERVATIONS WHERE ReservationID = ?', [reservationId], (err, reservation) => {
+        if (err) {
+            console.error('Error checking reservation:', err);
+            return res.status(500).send('Error checking reservation');
+        }
+        
+        if (!reservation) {
+            return res.status(404).send('Reservation not found');
+        }
+
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+
+            // First delete any associated orders
+            db.run(
+                'DELETE FROM ORDERS WHERE ReservationID = ?',
+                [reservationId],
+                function(err) {
+                    if (err) {
+                        console.error('Error deleting associated orders:', err);
+                        db.run('ROLLBACK');
+                        return res.status(500).send('Error deleting associated orders');
+                    }
+
+                    // Then delete the reservation
+                    db.run(
+                        'DELETE FROM RESERVATIONS WHERE ReservationID = ?',
+                        [reservationId],
+                        function(err) {
+                            if (err) {
+                                console.error('Error deleting reservation:', err);
+                                db.run('ROLLBACK');
+                                return res.status(500).send('Error deleting reservation');
+                            }
+
+                            db.run('COMMIT');
+                            res.redirect('/staff/reservations');
+                        }
+                    );
+                }
+            );
+        });
+    });
+});
+
 // Manage orders
 app.get('/staff/orders', requireLogin, (req, res) => {
-    db.all(
-        `SELECT o.*, s.Name as StaffName 
+    db.all(`
+        SELECT o.*, s.Name as StaffName 
         FROM ORDERS o 
-        JOIN STAFF s ON o.StaffID = s.StaffID 
-        ORDER BY o.OrderDateTime DESC`,
-        (err, orders) => {
-            if (err) {
-                console.error('Error fetching orders:', err);
-                orders = [];
-            }
-            res.render('pages/manage_orders', { orders });
+        LEFT JOIN STAFF s ON o.StaffID = s.StaffID 
+        ORDER BY o.OrderDateTime DESC
+    `, (err, orders) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/manage_orders', { 
+                orders: [], 
+                error: "Could not fetch orders." 
+            });
         }
-    );
+        res.render('pages/manage_orders', { 
+            orders, 
+            error: null 
+        });
+    });
+});
+
+// Delete order
+app.post('/staff/order/delete/:id', requireLogin, (req, res) => {
+    const orderId = req.params.id;
+    
+    // First check if the order exists
+    db.get('SELECT * FROM ORDERS WHERE OrderID = ?', [orderId], (err, order) => {
+        if (err) {
+            console.error('Error checking order:', err);
+            return res.status(500).send('Error checking order');
+        }
+        
+        if (!order) {
+            return res.status(404).send('Order not found');
+        }
+
+        db.serialize(() => {
+            db.run('BEGIN TRANSACTION');
+
+            // First delete all associated order items
+            db.run(
+                'DELETE FROM ORDER_ITEMS WHERE OrderID = ?',
+                [orderId],
+                function(err) {
+                    if (err) {
+                        console.error('Error deleting order items:', err);
+                        db.run('ROLLBACK');
+                        return res.status(500).send('Error deleting order items');
+                    }
+
+                    // Then delete the order
+                    db.run(
+                        'DELETE FROM ORDERS WHERE OrderID = ?',
+                        [orderId],
+                        function(err) {
+                            if (err) {
+                                console.error('Error deleting order:', err);
+                                db.run('ROLLBACK');
+                                return res.status(500).send('Error deleting order');
+                            }
+
+                            db.run('COMMIT');
+                            res.redirect('/staff/orders');
+                        }
+                    );
+                }
+            );
+        });
+    });
 });
 
 // Create new order
 app.get('/staff/order/new', requireLogin, (req, res) => {
     db.all('SELECT * FROM MENU_ITEMS ORDER BY Category, Name', (err, menuItems) => {
         if (err) {
-            console.error('Error fetching menu items:', err);
-            menuItems = [];
+            console.error(err);
+            return res.render('pages/order_form', { 
+                order: null, 
+                menuItems: [], 
+                error: "Could not fetch menu items." 
+            });
         }
         res.render('pages/order_form', { 
-            order: null,
-            menuItems,
-            isNew: true
+            order: null, 
+            menuItems, 
+            error: null 
         });
     });
 });
 
 // Edit order
-app.get('/staff/order/edit/:id', requireLogin, (req, res) => {
-    db.get(
-        `SELECT o.*, s.Name as StaffName 
-        FROM ORDERS o 
-        JOIN STAFF s ON o.StaffID = s.StaffID 
-        WHERE o.OrderID = ?`,
-        [req.params.id],
-        (err, order) => {
-            if (err || !order) {
-                return res.redirect('/staff/orders');
-            }
-
-            db.all('SELECT * FROM MENU_ITEMS ORDER BY Category, Name', (err, menuItems) => {
-                if (err) {
-                    console.error('Error fetching menu items:', err);
-                    menuItems = [];
-                }
-
-                db.all(
-                    `SELECT oi.*, mi.Name, mi.Price 
-                    FROM ORDER_ITEMS oi 
-                    JOIN MENU_ITEMS mi ON oi.MenuItemID = mi.MenuItemID 
-                    WHERE oi.OrderID = ?`,
-                    [req.params.id],
-                    (err, orderItems) => {
-                        if (err) {
-                            console.error('Error fetching order items:', err);
-                            orderItems = [];
-                        }
-                        order.items = orderItems;
-                        res.render('pages/order_form', {
-                            order,
-                            menuItems,
-                            isNew: false
-                        });
-                    }
-                );
+app.get('/staff/order/edit/:order_id', requireLogin, (req, res) => {
+    db.get(`
+        SELECT o.*, 
+               GROUP_CONCAT(oi.MenuItemID || ',' || oi.Quantity || ',' || oi.SpecialRequests) as items
+        FROM ORDERS o
+        LEFT JOIN ORDER_ITEMS oi ON o.OrderID = oi.OrderID
+        WHERE o.OrderID = ?
+        GROUP BY o.OrderID
+    `, [req.params.order_id], (err, order) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/order_form', { 
+                order: null, 
+                menuItems: [], 
+                error: "Could not fetch order details." 
             });
         }
-    );
+        db.all('SELECT * FROM MENU_ITEMS ORDER BY Category, Name', (err, menuItems) => {
+            if (err) {
+                console.error(err);
+                return res.render('pages/order_form', { 
+                    order, 
+                    menuItems: [], 
+                    error: "Could not fetch menu items." 
+                });
+            }
+            res.render('pages/order_form', { 
+                order, 
+                menuItems, 
+                error: null 
+            });
+        });
+    });
 });
 
 // Save/update order
@@ -427,11 +535,545 @@ app.post('/staff/order/save', requireLogin, (req, res) => {
 app.get('/staff/menu', requireLogin, (req, res) => {
     db.all('SELECT * FROM MENU_ITEMS ORDER BY Category, Name', (err, menuItems) => {
         if (err) {
-            console.error('Error fetching menu items:', err);
-            menuItems = [];
+            console.error(err);
+            return res.render('pages/view_menu', { 
+                menuItems: [], 
+                error: "Could not fetch menu items." 
+            });
         }
-        res.render('pages/view_menu', { menuItems });
+        res.render('pages/view_menu', { 
+            menuItems, 
+            error: null 
+        });
     });
+});
+
+// Kitchen display
+app.get('/staff/kitchen', requireLogin, (req, res) => {
+    db.all(`
+        SELECT o.*, s.Name as StaffName,
+               GROUP_CONCAT(m.Name || ' (x' || oi.Quantity || ')' || 
+                           CASE WHEN oi.SpecialRequests IS NOT NULL 
+                                THEN ' - Note: ' || oi.SpecialRequests 
+                                ELSE '' END) as items
+        FROM ORDERS o
+        LEFT JOIN STAFF s ON o.StaffID = s.StaffID
+        LEFT JOIN ORDER_ITEMS oi ON o.OrderID = oi.OrderID
+        LEFT JOIN MENU_ITEMS m ON oi.MenuItemID = m.MenuItemID
+        WHERE o.Status IN ('Placed', 'Ready for Kitchen', 'Preparing')
+        GROUP BY o.OrderID
+        ORDER BY o.OrderDateTime ASC
+    `, (err, orders) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/kitchen_display', { 
+                orders: [], 
+                error: "Could not fetch orders." 
+            });
+        }
+        res.render('pages/kitchen_display', { 
+            orders, 
+            error: null 
+        });
+    });
+});
+
+// Update kitchen order status
+app.post('/staff/order/update_kitchen_status/:order_id', requireLogin, (req, res) => {
+    const { status } = req.body;
+    const orderId = req.params.order_id;
+
+    db.run(
+        'UPDATE ORDERS SET Status = ? WHERE OrderID = ?',
+        [status, orderId],
+        (err) => {
+            if (err) {
+                console.error('Error updating order status:', err);
+            }
+            res.redirect('/staff/kitchen');
+        }
+    );
+});
+
+// Inventory management
+app.get('/staff/inventory', requireLogin, (req, res) => {
+    db.all(`
+        SELECT i.*, s.Name as SupplierName 
+        FROM INVENTORY_ITEMS i 
+        LEFT JOIN SUPPLIERS s ON i.SupplierID = s.SupplierID 
+        ORDER BY i.ItemName
+    `, (err, inventory) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/manage_inventory', { 
+                inventory: [], 
+                error: "Could not fetch inventory items." 
+            });
+        }
+        console.log('Fetched inventory:', inventory);
+        res.render('pages/manage_inventory', { 
+            inventory, 
+            error: null 
+        });
+    });
+});
+
+app.get('/staff/inventory/new', requireLogin, (req, res) => {
+    db.all('SELECT * FROM SUPPLIERS ORDER BY Name', (err, suppliers) => {
+        if (err) {
+            console.error('Error fetching suppliers:', err);
+            suppliers = [];
+        }
+        res.render('pages/inventory_form', {
+            item: null,
+            suppliers,
+            isNew: true
+        });
+    });
+});
+
+app.post('/staff/inventory/add', requireLogin, (req, res) => {
+    const { itemName, description, quantityOnHand, unit, reorderLevel, supplierId } = req.body;
+
+    db.run(
+        `INSERT INTO INVENTORY_ITEMS 
+        (ItemName, Description, QuantityOnHand, Unit, ReorderLevel, SupplierID) 
+        VALUES (?, ?, ?, ?, ?, ?)`,
+        [itemName, description, quantityOnHand, unit, reorderLevel, supplierId || null],
+        (err) => {
+            if (err) {
+                console.error('Error adding inventory item:', err);
+            }
+            res.redirect('/staff/inventory');
+        }
+    );
+});
+
+app.get('/staff/inventory/edit/:item_id', requireLogin, (req, res) => {
+    const itemId = req.params.item_id;
+
+    Promise.all([
+        new Promise((resolve, reject) => {
+            db.get('SELECT * FROM INVENTORY_ITEMS WHERE ItemID = ?', [itemId], (err, item) => {
+                if (err) reject(err);
+                else resolve(item);
+            });
+        }),
+        new Promise((resolve, reject) => {
+            db.all('SELECT * FROM SUPPLIERS ORDER BY Name', (err, suppliers) => {
+                if (err) reject(err);
+                else resolve(suppliers);
+            });
+        })
+    ])
+    .then(([item, suppliers]) => {
+        res.render('pages/inventory_form', {
+            item,
+            suppliers,
+            isNew: false
+        });
+    })
+    .catch(err => {
+        console.error('Error fetching inventory item:', err);
+        res.redirect('/staff/inventory');
+    });
+});
+
+app.post('/staff/inventory/update/:item_id', requireLogin, (req, res) => {
+    const itemId = req.params.item_id;
+    const { itemName, description, quantityOnHand, unit, reorderLevel, supplierId } = req.body;
+
+    db.run(
+        `UPDATE INVENTORY_ITEMS 
+        SET ItemName = ?, Description = ?, QuantityOnHand = ?, 
+            Unit = ?, ReorderLevel = ?, SupplierID = ? 
+        WHERE ItemID = ?`,
+        [itemName, description, quantityOnHand, unit, reorderLevel, supplierId || null, itemId],
+        (err) => {
+            if (err) {
+                console.error('Error updating inventory item:', err);
+            }
+            res.redirect('/staff/inventory');
+        }
+    );
+});
+
+// Staff scheduling routes
+// Manager routes
+app.get('/staff/schedule/manage', requireLogin, (req, res) => {
+    db.all('SELECT StaffID, Name FROM STAFF ORDER BY Name', (err, staff) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/manage_schedule', {
+                shifts: [],
+                staff: [],
+                error: 'Could not fetch staff list.'
+            });
+        }
+        db.all('SELECT * FROM SHIFTS ORDER BY StartDateTime ASC', (err2, shiftsRaw) => {
+            if (err2) {
+                console.error(err2);
+                return res.render('pages/manage_schedule', {
+                    shifts: [],
+                    staff,
+                    error: 'Could not fetch shifts.'
+                });
+            }
+            // For each shift, fetch assignments
+            const shiftIds = shiftsRaw.map(s => s.ShiftID);
+            if (shiftIds.length === 0) {
+                return res.render('pages/manage_schedule', {
+                    shifts: [],
+                    staff,
+                    error: null
+                });
+            }
+            db.all(`SELECT ss.*, st.Name as StaffName FROM STAFF_SHIFTS ss JOIN STAFF st ON ss.StaffID = st.StaffID WHERE ss.ShiftID IN (${shiftIds.map(() => '?').join(',')})`, shiftIds, (err3, assignmentsRaw) => {
+                if (err3) {
+                    console.error(err3);
+                    return res.render('pages/manage_schedule', {
+                        shifts: [],
+                        staff,
+                        error: 'Could not fetch assignments.'
+                    });
+                }
+                // Group assignments by shift
+                const assignmentsByShift = {};
+                assignmentsRaw.forEach(a => {
+                    if (!assignmentsByShift[a.ShiftID]) assignmentsByShift[a.ShiftID] = [];
+                    assignmentsByShift[a.ShiftID].push(a);
+                });
+                // Attach assignments to shifts
+                const shifts = shiftsRaw.map(shift => ({
+                    ...shift,
+                    assignments: assignmentsByShift[shift.ShiftID] || []
+                }));
+                res.render('pages/manage_schedule', {
+                    shifts,
+                    staff,
+                    error: null
+                });
+            });
+        });
+    });
+});
+
+app.get('/staff/schedule/shift/new', requireLogin, (req, res) => {
+    res.render('pages/shift_form', { 
+        isNew: true, 
+        shift: null, 
+        error: null 
+    });
+});
+
+app.post('/staff/schedule/shift/create', requireLogin, (req, res) => {
+    const { start_datetime, end_datetime, role_required } = req.body;
+
+    // Validation
+    if (!start_datetime || !end_datetime) {
+        return res.render('pages/shift_form', {
+            isNew: true,
+            shift: req.body,
+            error: 'Start and end times are required'
+        });
+    }
+
+    const start = new Date(start_datetime);
+    const end = new Date(end_datetime);
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.render('pages/shift_form', {
+            isNew: true,
+            shift: req.body,
+            error: 'Invalid date format'
+        });
+    }
+
+    if (end <= start) {
+        return res.render('pages/shift_form', {
+            isNew: true,
+            shift: req.body,
+            error: 'End time must be after start time'
+        });
+    }
+
+    // Insert into database
+    db.run(
+        `INSERT INTO SHIFTS (StartDateTime, EndDateTime, RoleRequired) 
+         VALUES (?, ?, ?)`,
+        [start_datetime, end_datetime, role_required || null],
+        function(err) {
+            if (err) {
+                console.error('Error creating shift:', err);
+                return res.render('pages/shift_form', {
+                    isNew: true,
+                    shift: req.body,
+                    error: 'Failed to create shift. Please try again.'
+                });
+            }
+
+            // Redirect to manage schedule page
+            res.redirect('/staff/schedule/manage');
+        }
+    );
+});
+
+app.get('/staff/schedule/shift/edit/:shift_id', requireLogin, (req, res) => {
+    db.get('SELECT * FROM SHIFTS WHERE ShiftID = ?', [req.params.shift_id], (err, shift) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/shift_form', { 
+                isNew: false, 
+                shift: null, 
+                error: "Could not fetch shift details." 
+            });
+        }
+        res.render('pages/shift_form', { 
+            isNew: false, 
+            shift, 
+            error: null 
+        });
+    });
+});
+
+app.post('/staff/schedule/shift/update/:shift_id', requireLogin, (req, res) => {
+    const { start_datetime, end_datetime, role_required } = req.body;
+    const shiftId = req.params.shift_id;
+
+    db.run(
+        'UPDATE SHIFTS SET StartDateTime = ?, EndDateTime = ?, RoleRequired = ? WHERE ShiftID = ?',
+        [start_datetime, end_datetime, role_required, shiftId],
+        (err) => {
+            if (err) {
+                console.error('Error updating shift:', err);
+            }
+            res.redirect('/staff/schedule/manage');
+        }
+    );
+});
+
+app.post('/staff/schedule/assign_staff_to_shift', requireLogin, (req, res) => {
+    const { staff_id, shift_id } = req.body;
+
+    // Check for overlapping shifts
+    db.get(
+        `SELECT ss.*, s.StartDateTime, s.EndDateTime
+        FROM STAFF_SHIFTS ss
+        JOIN SHIFTS s ON ss.ShiftID = s.ShiftID
+        WHERE ss.StaffID = ? AND ss.ManagerApprovalStatus != 'Denied'`,
+        [staff_id],
+        (err, existingShift) => {
+            if (err) {
+                console.error('Error checking for overlapping shifts:', err);
+                return res.redirect('/staff/schedule/manage');
+            }
+
+            if (existingShift) {
+                // Basic overlap check - could be more sophisticated
+                db.get(
+                    'SELECT * FROM SHIFTS WHERE ShiftID = ?',
+                    [shift_id],
+                    (err, newShift) => {
+                        if (err || !newShift) {
+                            return res.redirect('/staff/schedule/manage');
+                        }
+
+                        const existingStart = new Date(existingShift.StartDateTime);
+                        const existingEnd = new Date(existingShift.EndDateTime);
+                        const newStart = new Date(newShift.StartDateTime);
+                        const newEnd = new Date(newShift.EndDateTime);
+
+                        if (newStart < existingEnd && newEnd > existingStart) {
+                            // Overlap detected
+                            return res.redirect('/staff/schedule/manage');
+                        }
+
+                        // No overlap, proceed with assignment
+                        assignStaffToShift(staff_id, shift_id, res);
+                    }
+                );
+            } else {
+                // No existing shifts, proceed with assignment
+                assignStaffToShift(staff_id, shift_id, res);
+            }
+        }
+    );
+});
+
+function assignStaffToShift(staff_id, shift_id, res) {
+    db.run(
+        'INSERT INTO STAFF_SHIFTS (StaffID, ShiftID, ManagerApprovalStatus) VALUES (?, ?, ?)',
+        [staff_id, shift_id, 'Approved'],
+        (err) => {
+            if (err) {
+                console.error('Error assigning staff to shift:', err);
+            }
+            res.redirect('/staff/schedule/manage');
+        }
+    );
+}
+
+app.post('/staff/schedule/approve_request/:staff_shift_id', requireLogin, (req, res) => {
+    const staffShiftId = req.params.staff_shift_id;
+
+    db.run(
+        'UPDATE STAFF_SHIFTS SET ManagerApprovalStatus = ? WHERE StaffShiftID = ?',
+        ['Approved', staffShiftId],
+        (err) => {
+            if (err) {
+                console.error('Error approving shift request:', err);
+            }
+            res.redirect('/staff/schedule/manage');
+        }
+    );
+});
+
+app.post('/staff/schedule/deny_request/:staff_shift_id', requireLogin, (req, res) => {
+    const staffShiftId = req.params.staff_shift_id;
+
+    db.run(
+        'UPDATE STAFF_SHIFTS SET ManagerApprovalStatus = ? WHERE StaffShiftID = ?',
+        ['Denied', staffShiftId],
+        (err) => {
+            if (err) {
+                console.error('Error denying shift request:', err);
+            }
+            res.redirect('/staff/schedule/manage');
+        }
+    );
+});
+
+// General staff routes
+app.get('/staff/my-schedule', requireLogin, (req, res) => {
+    db.all(`
+        SELECT s.*, ss.ManagerApprovalStatus
+        FROM SHIFTS s
+        JOIN STAFF_SHIFTS ss ON s.ShiftID = ss.ShiftID
+        WHERE ss.StaffID = ?
+        ORDER BY s.StartDateTime ASC
+    `, [req.session.staffId], (err, shiftsRaw) => {
+        if (err) {
+            console.error(err);
+            return res.render('pages/my_schedule', {
+                shifts: [],
+                error: 'Could not fetch your schedule.'
+            });
+        }
+        // Format shifts for display
+        const shifts = shiftsRaw.map(shift => ({
+            ...shift,
+            startDate: new Date(shift.StartDateTime).toLocaleDateString(),
+            startTime: new Date(shift.StartDateTime).toLocaleTimeString(),
+            endTime: new Date(shift.EndDateTime).toLocaleTimeString()
+        }));
+        res.render('pages/my_schedule', {
+            shifts,
+            error: null
+        });
+    });
+});
+
+// Delete shift
+app.post('/staff/schedule/shift/delete/:shift_id', requireLogin, (req, res) => {
+    const shiftId = req.params.shift_id;
+    
+    db.serialize(() => {
+        db.run('BEGIN TRANSACTION');
+        
+        // First delete all staff assignments for this shift
+        db.run(
+            'DELETE FROM STAFF_SHIFTS WHERE ShiftID = ?',
+            [shiftId],
+            function(err) {
+                if (err) {
+                    console.error('Error deleting staff assignments:', err);
+                    db.run('ROLLBACK');
+                    return res.status(500).send('Error deleting staff assignments');
+                }
+                
+                // Then delete the shift
+                db.run(
+                    'DELETE FROM SHIFTS WHERE ShiftID = ?',
+                    [shiftId],
+                    function(err) {
+                        if (err) {
+                            console.error('Error deleting shift:', err);
+                            db.run('ROLLBACK');
+                            return res.status(500).send('Error deleting shift');
+                        }
+                        
+                        db.run('COMMIT');
+                        res.redirect('/staff/schedule/manage');
+                    }
+                );
+            }
+        );
+    });
+});
+
+// Unassign staff from shift
+app.post('/staff/schedule/unassign/:staff_shift_id', requireLogin, (req, res) => {
+    const staffShiftId = req.params.staff_shift_id;
+    
+    db.run(
+        'DELETE FROM STAFF_SHIFTS WHERE StaffShiftID = ?',
+        [staffShiftId],
+        function(err) {
+            if (err) {
+                console.error('Error unassigning staff:', err);
+            }
+            res.redirect('/staff/schedule/manage');
+        }
+    );
+});
+
+// Assign staff to shift
+app.post('/staff/schedule/assign', requireLogin, (req, res) => {
+    const { staff_id, shift_id } = req.body;
+    
+    // Check for overlapping shifts
+    db.get(
+        `SELECT ss.*, s.StartDateTime, s.EndDateTime
+        FROM STAFF_SHIFTS ss
+        JOIN SHIFTS s ON ss.ShiftID = s.ShiftID
+        WHERE ss.StaffID = ? AND ss.ManagerApprovalStatus != 'Denied'`,
+        [staff_id],
+        (err, existingShift) => {
+            if (err) {
+                console.error('Error checking for overlapping shifts:', err);
+                return res.redirect('/staff/schedule/manage');
+            }
+            
+            if (existingShift) {
+                // Get the new shift details
+                db.get(
+                    'SELECT * FROM SHIFTS WHERE ShiftID = ?',
+                    [shift_id],
+                    (err, newShift) => {
+                        if (err || !newShift) {
+                            return res.redirect('/staff/schedule/manage');
+                        }
+                        
+                        const existingStart = new Date(existingShift.StartDateTime);
+                        const existingEnd = new Date(existingShift.EndDateTime);
+                        const newStart = new Date(newShift.StartDateTime);
+                        const newEnd = new Date(newShift.EndDateTime);
+                        
+                        if (newStart < existingEnd && newEnd > existingStart) {
+                            // Overlap detected
+                            return res.redirect('/staff/schedule/manage');
+                        }
+                        
+                        // No overlap, proceed with assignment
+                        assignStaffToShift(staff_id, shift_id, res);
+                    }
+                );
+            } else {
+                // No existing shifts, proceed with assignment
+                assignStaffToShift(staff_id, shift_id, res);
+            }
+        }
+    );
 });
 
 // Start server

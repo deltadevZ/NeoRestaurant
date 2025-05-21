@@ -1,0 +1,128 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="container">
+    <div class="dashboard">
+        <section>
+            <h1 class="page-title"><%= isNew ? 'Create New Shift' : 'Edit Shift' %></h1>
+
+            <% if (error) { %>
+                <div class="error-message">
+                    <%= error %>
+                </div>
+            <% } %>
+
+            <form action="/staff/schedule/shift/create" method="POST" class="shift-form">
+                <div class="form-group">
+                    <label for="start_datetime">Start Date and Time *</label>
+                    <input type="datetime-local" 
+                           id="start_datetime" 
+                           name="start_datetime" 
+                           value="<%= shift ? shift.StartDateTime : '' %>"
+                           required>
+                </div>
+
+                <div class="form-group">
+                    <label for="end_datetime">End Date and Time *</label>
+                    <input type="datetime-local" 
+                           id="end_datetime" 
+                           name="end_datetime" 
+                           value="<%= shift ? shift.EndDateTime : '' %>"
+                           required>
+                </div>
+
+                <div class="form-group">
+                    <label for="role_required">Role Required</label>
+                    <select id="role_required" name="role_required">
+                        <option value="">Any Role</option>
+                        <option value="Waiter" <%= shift && shift.RoleRequired === 'Waiter' ? 'selected' : '' %>>Waiter</option>
+                        <option value="Chef" <%= shift && shift.RoleRequired === 'Chef' ? 'selected' : '' %>>Chef</option>
+                        <option value="Manager" <%= shift && shift.RoleRequired === 'Manager' ? 'selected' : '' %>>Manager</option>
+                    </select>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="cta-button primary">Create Shift</button>
+                    <a href="/staff/schedule/manage" class="cta-button secondary">Cancel</a>
+                </div>
+            </form>
+        </section>
+    </div>
+</div>
+
+<style>
+.shift-form {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    color: #2c3e50;
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+}
+
+.error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const startInput = document.getElementById('start_datetime');
+    const endInput = document.getElementById('end_datetime');
+
+    // Set min datetime to now
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    
+    const minDateTime = `${year}-${month}-${day}T${hours}:${minutes}`;
+    startInput.min = minDateTime;
+    endInput.min = minDateTime;
+
+    // Update end datetime min when start datetime changes
+    startInput.addEventListener('change', function() {
+        endInput.min = this.value;
+        if (endInput.value && endInput.value < this.value) {
+            endInput.value = this.value;
+        }
+    });
+});
+</script>
+
+<%- include('../partials/footer') %> 

@@ -1,0 +1,146 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="container">
+    <div class="dashboard">
+        <section>
+            <h1 class="page-title">Inventory Management</h1>
+
+            <% if (error) { %>
+                <div class="error-message">
+                    <%= error %>
+                </div>
+            <% } %>
+
+            <div class="actions">
+                <a href="/staff/inventory/new" class="cta-button primary square">Add New Item</a>
+            </div>
+
+            <% if (inventory && inventory.length > 0) { %>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Description</th>
+                            <th>Quantity</th>
+                            <th>Unit</th>
+                            <th>Reorder Level</th>
+                            <th>Supplier</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% inventory.forEach(item => { %>
+                            <tr>
+                                <td><%= item.ItemName %></td>
+                                <td><%= item.Description ? item.Description : '-' %></td>
+                                <td class="<%= item.QuantityOnHand <= item.ReorderLevel ? 'text-danger' : '' %>">
+                                    <%= item.QuantityOnHand %>
+                                </td>
+                                <td><%= item.Unit ? item.Unit : '-' %></td>
+                                <td><%= item.ReorderLevel %></td>
+                                <td><%= item.SupplierName ? item.SupplierName : 'N/A' %></td>
+                                <td>
+                                    <a href="/staff/inventory/edit/<%= item.ItemID %>" class="edit-button">Edit</a>
+                                    <form action="/staff/inventory/delete/<%= item.ItemID %>" method="POST" style="display: inline;" onsubmit="return confirm('Are you sure you want to delete this item?');">
+                                        <button type="submit" class="delete-button">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        <% }); %>
+                    </tbody>
+                </table>
+            <% } else { %>
+                <p class="no-items">No inventory items found. <a href="/staff/inventory/new">Add New Item</a></p>
+            <% } %>
+        </section>
+    </div>
+</div>
+
+<style>
+.actions {
+    margin-bottom: 1.5rem;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 1rem;
+    background-color: white;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+th, td {
+    padding: 0.75rem;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+th {
+    background-color: #f8f9fa;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+tr:hover {
+    background-color: #f8f9fa;
+}
+
+.text-danger {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.no-items {
+    text-align: center;
+    color: #6c757d;
+    margin: 2rem 0;
+}
+
+.edit-button, .delete-button {
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    text-decoration: none;
+    font-size: 0.875rem;
+    margin-right: 0.5rem;
+}
+
+.edit-button {
+    background-color: #007bff;
+    color: white;
+}
+
+.delete-button {
+    background-color: #dc3545;
+    color: white;
+    border: none;
+    cursor: pointer;
+}
+
+.edit-button:hover {
+    background-color: #0056b3;
+}
+
+.delete-button:hover {
+    background-color: #c82333;
+}
+
+.cta-button.square {
+    border-radius: 4px !important;
+    padding: 0.75rem 2rem !important;
+    font-size: 1.1rem;
+    font-weight: 600;
+    background: #3498db;
+    color: #fff;
+    border: none;
+    box-shadow: none;
+    transition: background 0.2s;
+    display: inline-block;
+}
+.cta-button.square:hover {
+    background: #217dbb;
+    color: #fff;
+}
+</style>
+
+<%- include('../partials/footer') %> 

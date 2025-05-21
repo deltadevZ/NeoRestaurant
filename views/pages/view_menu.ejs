@@ -1,40 +1,50 @@
 <%- include('../partials/header') %>
 <%- include('../partials/staff_nav') %>
 
-<div class="menu-view">
-    <h1>Menu Items</h1>
+<div class="container">
+    <div class="dashboard">
+        <section>
+            <h1 class="page-title">Menu Items</h1>
 
-    <% 
-    const categories = ['Appetizer', 'Main Course', 'Dessert', 'Beverage'];
-    categories.forEach(category => {
-        const categoryItems = menuItems.filter(item => item.Category === category);
-        if (categoryItems.length > 0) {
-    %>
-        <section class="menu-category">
-            <h2><%= category %></h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Description</th>
-                        <th>Price</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% categoryItems.forEach(item => { %>
-                        <tr>
-                            <td><%= item.Name %></td>
-                            <td><%= item.Description %></td>
-                            <td>$<%= item.Price.toFixed(2) %></td>
-                        </tr>
-                    <% }); %>
-                </tbody>
-            </table>
+            <% if (error) { %>
+                <div class="error-message">
+                    <%= error %>
+                </div>
+            <% } %>
+
+            <% 
+            const categories = ['Appetizer', 'Main Course', 'Dessert', 'Beverage'];
+            categories.forEach(category => {
+                const categoryItems = menuItems.filter(item => item.Category === category);
+                if (categoryItems.length > 0) {
+            %>
+                <section class="menu-category">
+                    <h2><%= category %></h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Description</th>
+                                <th>Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <% categoryItems.forEach(item => { %>
+                                <tr>
+                                    <td><%= item.Name %></td>
+                                    <td><%= item.Description %></td>
+                                    <td>$<%= item.Price.toFixed(2) %></td>
+                                </tr>
+                            <% }); %>
+                        </tbody>
+                    </table>
+                </section>
+            <% 
+                }
+            }); 
+            %>
         </section>
-    <% 
-        }
-    }); 
-    %>
+    </div>
 </div>
 
 <%- include('../partials/footer') %> 

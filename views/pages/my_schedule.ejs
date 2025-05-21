@@ -1,0 +1,107 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="container">
+    <div class="dashboard">
+        <section>
+            <h1 class="page-title">My Schedule</h1>
+
+            <% if (error) { %>
+                <div class="error-message">
+                    <%= error %>
+                </div>
+            <% } %>
+
+            <% if (shifts && shifts.length > 0) { %>
+                <div class="schedule-list">
+                    <% shifts.forEach(shift => { %>
+                        <div class="schedule-item">
+                            <div class="shift-details">
+                                <h3>Shift Details</h3>
+                                <p><strong>Date:</strong> <%= shift.startDate %></p>
+                                <p><strong>Time:</strong> <%= shift.startTime %> - <%= shift.endTime %></p>
+                                <p><strong>Role:</strong> <%= shift.RoleRequired || 'Any Role' %></p>
+                                <p><strong>Status:</strong> 
+                                    <span class="status-badge <%= shift.ManagerApprovalStatus.toLowerCase() %>">
+                                        <%= shift.ManagerApprovalStatus %>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    <% }); %>
+                </div>
+            <% } else { %>
+                <p class="no-shifts">No shifts scheduled.</p>
+            <% } %>
+        </section>
+    </div>
+</div>
+
+<style>
+.schedule-list {
+    display: grid;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+.schedule-item {
+    background: white;
+    border-radius: 8px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.shift-details {
+    margin-bottom: 1rem;
+}
+
+.shift-details h3 {
+    color: #2c3e50;
+    margin-bottom: 1rem;
+}
+
+.shift-details p {
+    margin: 0.5rem 0;
+    color: #34495e;
+}
+
+.status-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.status-badge.approved {
+    background-color: #2ecc71;
+    color: white;
+}
+
+.status-badge.pending {
+    background-color: #f1c40f;
+    color: #2c3e50;
+}
+
+.status-badge.denied {
+    background-color: #e74c3c;
+    color: white;
+}
+
+.no-shifts {
+    text-align: center;
+    color: #7f8c8d;
+    font-size: 1.1rem;
+    margin-top: 2rem;
+}
+
+.error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1.5rem;
+}
+</style>
+
+<%- include('../partials/footer') %> 

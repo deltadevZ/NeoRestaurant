@@ -1,0 +1,15 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<div class="container">
+    <div class="dashboard">
+        <section>
+            <h1 class="page-title">Inventory Management</h1>
+
+            <% if (error) { %>
+                <div class="error-message">
+                    <%= error %>
+                </div>
+            <% } %>
+
+            // ... existing code ... 

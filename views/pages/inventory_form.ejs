@@ -1,0 +1,193 @@
+<%- include('../partials/header') %>
+<%- include('../partials/staff_nav') %>
+
+<main class="container">
+    <div class="form-header">
+        <h1><%= isNew ? 'Add New Inventory Item' : 'Edit Inventory Item' %></h1>
+        <a href="/staff/inventory" class="btn btn-secondary">Back to Inventory</a>
+    </div>
+
+    <form action="<%= isNew ? '/staff/inventory/add' : `/staff/inventory/update/${item.ItemID}` %>" 
+          method="POST" 
+          class="inventory-form">
+        
+        <div class="form-group">
+            <label for="itemName">Item Name *</label>
+            <input type="text" 
+                   id="itemName" 
+                   name="itemName" 
+                   class="form-control" 
+                   value="<%= item ? item.ItemName : '' %>"
+                   required>
+        </div>
+
+        <div class="form-group">
+            <label for="description">Description</label>
+            <textarea id="description" 
+                      name="description" 
+                      class="form-control" 
+                      rows="3"><%= item ? item.Description : '' %></textarea>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group col-md-6">
+                <label for="quantityOnHand">Quantity on Hand *</label>
+                <input type="number" 
+                       id="quantityOnHand" 
+                       name="quantityOnHand" 
+                       class="form-control" 
+                       value="<%= item ? item.QuantityOnHand : '0' %>"
+                       min="0"
+                       step="0.01"
+                       required>
+            </div>
+
+            <div class="form-group col-md-6">
+                <label for="unit">Unit *</label>
+                <select id="unit" 
+                        name="unit" 
+                        class="form-control"
+                        required>
+                    <option value="">Select Unit</option>
+                    <option value="kg" <%= item && item.Unit === 'kg' ? 'selected' : '' %>>Kilograms (kg)</option>
+                    <option value="g" <%= item && item.Unit === 'g' ? 'selected' : '' %>>Grams (g)</option>
+                    <option value="l" <%= item && item.Unit === 'l' ? 'selected' : '' %>>Liters (l)</option>
+                    <option value="ml" <%= item && item.Unit === 'ml' ? 'selected' : '' %>>Milliliters (ml)</option>
+                    <option value="pcs" <%= item && item.Unit === 'pcs' ? 'selected' : '' %>>Pieces (pcs)</option>
+                    <option value="box" <%= item && item.Unit === 'box' ? 'selected' : '' %>>Box</option>
+                    <option value="pack" <%= item && item.Unit === 'pack' ? 'selected' : '' %>>Pack</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group col-md-6">
+                <label for="reorderLevel">Reorder Level *</label>
+                <input type="number" 
+                       id="reorderLevel" 
+                       name="reorderLevel" 
+                       class="form-control" 
+                       value="<%= item ? item.ReorderLevel : '0' %>"
+                       min="0"
+                       step="0.01"
+                       required>
+                <small class="form-text text-muted">
+                    When quantity falls below this level, a low stock alert will be triggered.
+                </small>
+            </div>
+
+            <div class="form-group col-md-6">
+                <label for="supplierId">Supplier</label>
+                <select id="supplierId" 
+                        name="supplierId" 
+                        class="form-control">
+                    <option value="">Select Supplier</option>
+                    <% suppliers.forEach(supplier => { %>
+                        <option value="<%= supplier.SupplierID %>" 
+                                <%= item && item.SupplierID === supplier.SupplierID ? 'selected' : '' %>>
+                            <%= supplier.Name %>
+                        </option>
+                    <% }); %>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">
+                <%= isNew ? 'Add Item' : 'Update Item' %>
+            </button>
+            <a href="/staff/inventory" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</main>
+
+<style>
+.form-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.inventory-form {
+    max-width: 800px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.form-row .form-group {
+    flex: 1;
+    margin-bottom: 0;
+}
+
+.form-actions {
+    display: flex;
+    gap: 1rem;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid #eee;
+}
+
+.form-text {
+    font-size: 0.875rem;
+    margin-top: 0.25rem;
+}
+
+@media (max-width: 768px) {
+    .form-row {
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+    
+    .inventory-form {
+        padding: 1rem;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('.inventory-form');
+    const quantityInput = document.getElementById('quantityOnHand');
+    const reorderLevelInput = document.getElementById('reorderLevel');
+
+    // Validate that reorder level is not greater than quantity on hand
+    function validateReorderLevel() {
+        const quantity = parseFloat(quantityInput.value);
+        const reorderLevel = parseFloat(reorderLevelInput.value);
+        
+        if (reorderLevel > quantity) {
+            reorderLevelInput.setCustomValidity('Reorder level cannot be greater than quantity on hand');
+        } else {
+            reorderLevelInput.setCustomValidity('');
+        }
+    }
+
+    quantityInput.addEventListener('input', validateReorderLevel);
+    reorderLevelInput.addEventListener('input', validateReorderLevel);
+
+    // Form submission validation
+    form.addEventListener('submit', function(event) {
+        validateReorderLevel();
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    });
+});
+</script>
+
+<%- include('../partials/footer') %> 

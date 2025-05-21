@@ -1,58 +1,68 @@
 <%- include('../partials/header') %>
 <%- include('../partials/staff_nav') %>
 
-<div class="order-form">
-    <h1><%= isNew ? 'New Order' : 'Edit Order' %></h1>
+<div class="container">
+    <div class="dashboard">
+        <section>
+            <h1 class="page-title"><%= order ? 'Edit Order' : 'New Order' %></h1>
 
-    <form action="/staff/order/save" method="POST" id="orderForm">
-        <div class="form-group">
-            <label for="tableNumber">Table Number:</label>
-            <input type="number" id="tableNumber" name="tableNumber" value="<%= order ? order.TableNumber : '' %>" required min="1" max="20">
-        </div>
+            <% if (error) { %>
+                <div class="error-message">
+                    <%= error %>
+                </div>
+            <% } %>
 
-        <div class="form-group">
-            <label for="status">Status:</label>
-            <select id="status" name="status" required>
-                <option value="Placed" <%= order && order.Status === 'Placed' ? 'selected' : '' %>>Placed</option>
-                <option value="Preparing" <%= order && order.Status === 'Preparing' ? 'selected' : '' %>>Preparing</option>
-                <option value="Ready for Service" <%= order && order.Status === 'Ready for Service' ? 'selected' : '' %>>Ready for Service</option>
-                <option value="Served" <%= order && order.Status === 'Served' ? 'selected' : '' %>>Served</option>
-                <option value="Paid" <%= order && order.Status === 'Paid' ? 'selected' : '' %>>Paid</option>
-                <option value="Cancelled" <%= order && order.Status === 'Cancelled' ? 'selected' : '' %>>Cancelled</option>
-            </select>
-        </div>
+            <form action="/staff/order/save" method="POST" id="orderForm">
+                <div class="form-group">
+                    <label for="tableNumber">Table Number:</label>
+                    <input type="number" id="tableNumber" name="tableNumber" value="<%= order ? order.TableNumber : '' %>" required min="1" max="20">
+                </div>
 
-        <div class="order-items">
-            <h2>Order Items</h2>
-            <div id="itemsContainer">
-                <% if (order && order.items) { %>
-                    <% order.items.forEach((item, index) => { %>
-                        <div class="order-item">
-                            <select name="items[<%= index %>][menuItemId]" required>
-                                <% menuItems.forEach(menuItem => { %>
-                                    <option value="<%= menuItem.MenuItemID %>" 
-                                            data-price="<%= menuItem.Price %>"
-                                            <%= item.MenuItemID === menuItem.MenuItemID ? 'selected' : '' %>>
-                                        <%= menuItem.Name %> - $<%= menuItem.Price.toFixed(2) %>
-                                    </option>
-                                <% }); %>
-                            </select>
-                            <input type="number" name="items[<%= index %>][quantity]" value="<%= item.Quantity %>" min="1" required>
-                            <input type="text" name="items[<%= index %>][specialRequests]" value="<%= item.SpecialRequests %>" placeholder="Special requests">
-                            <input type="hidden" name="items[<%= index %>][price]" value="<%= item.Price %>">
-                            <button type="button" class="remove-item">Remove</button>
-                        </div>
-                    <% }); %>
-                <% } %>
-            </div>
-            <button type="button" id="addItem" class="button">Add Item</button>
-        </div>
+                <div class="form-group">
+                    <label for="status">Status:</label>
+                    <select id="status" name="status" required>
+                        <option value="Placed" <%= order && order.Status === 'Placed' ? 'selected' : '' %>>Placed</option>
+                        <option value="Preparing" <%= order && order.Status === 'Preparing' ? 'selected' : '' %>>Preparing</option>
+                        <option value="Ready for Service" <%= order && order.Status === 'Ready for Service' ? 'selected' : '' %>>Ready for Service</option>
+                        <option value="Served" <%= order && order.Status === 'Served' ? 'selected' : '' %>>Served</option>
+                        <option value="Paid" <%= order && order.Status === 'Paid' ? 'selected' : '' %>>Paid</option>
+                        <option value="Cancelled" <%= order && order.Status === 'Cancelled' ? 'selected' : '' %>>Cancelled</option>
+                    </select>
+                </div>
 
-        <div class="form-actions">
-            <button type="submit" class="submit-button">Save Order</button>
-            <a href="/staff/orders" class="button">Cancel</a>
-        </div>
-    </form>
+                <div class="order-items">
+                    <h2>Order Items</h2>
+                    <div id="itemsContainer">
+                        <% if (order && order.items) { %>
+                            <% order.items.forEach((item, index) => { %>
+                                <div class="order-item">
+                                    <select name="items[<%= index %>][menuItemId]" required>
+                                        <% menuItems.forEach(menuItem => { %>
+                                            <option value="<%= menuItem.MenuItemID %>" 
+                                                    data-price="<%= menuItem.Price %>"
+                                                    <%= item.MenuItemID === menuItem.MenuItemID ? 'selected' : '' %>>
+                                                <%= menuItem.Name %> - $<%= menuItem.Price.toFixed(2) %>
+                                            </option>
+                                        <% }); %>
+                                    </select>
+                                    <input type="number" name="items[<%= index %>][quantity]" value="<%= item.Quantity %>" min="1" required>
+                                    <input type="text" name="items[<%= index %>][specialRequests]" value="<%= item.SpecialRequests %>" placeholder="Special requests">
+                                    <input type="hidden" name="items[<%= index %>][price]" value="<%= item.Price %>">
+                                    <button type="button" class="remove-item">Remove</button>
+                                </div>
+                            <% }); %>
+                        <% } %>
+                    </div>
+                    <button type="button" id="addItem" class="button">Add Item</button>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="submit-button">Save Order</button>
+                    <a href="/staff/orders" class="button">Cancel</a>
+                </div>
+            </form>
+        </section>
+    </div>
 </div>
 
 <script>
