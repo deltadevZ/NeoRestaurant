@@ -31,6 +31,14 @@ app.use(session({
     cookie: { secure: false } // Set to true if using HTTPS
 }));
 
+// Middleware to inject staffName and staffRole into res.locals for all views
+app.use((req, res, next) => {
+    res.locals.staffId = req.session.staffId || null;
+    res.locals.staffName = req.session.staffName || null;
+    res.locals.staffRole = req.session.staffRole || null;
+    next();
+});
+
 // View engine setup
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -197,6 +205,7 @@ app.post('/staff/login', (req, res) => {
             if (bcrypt.compareSync(password, staff.PasswordHash)) {
                 req.session.staffId = staff.StaffID;
                 req.session.staffRole = staff.Role;
+                req.session.staffName = staff.Name;
                 res.redirect('/staff/dashboard');
             } else {
                 res.render('pages/staff_login', {

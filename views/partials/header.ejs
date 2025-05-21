@@ -10,16 +10,88 @@
     <header>
         <nav>
             <div class="logo">Neo Restaurant</div>
-            <ul>
+            <ul class="nav-links">
                 <li><a href="/">Home</a></li>
                 <li><a href="/reserve">Make Reservation</a></li>
                 <% if (typeof staffId !== 'undefined' && staffId) { %>
                     <li><a href="/staff/dashboard">Dashboard</a></li>
-                    <li><a href="/staff/logout">Logout</a></li>
                 <% } else { %>
                     <li><a href="/staff/login">Staff Login</a></li>
                 <% } %>
             </ul>
+            <% if (typeof staffId !== 'undefined' && staffId) { %>
+                <div class="nav-right">
+                    <span class="staff-info"><%= staffName %> (<%= staffRole %>)</span>
+                    <a href="/staff/logout" class="logout-link">Logout</a>
+                </div>
+            <% } %>
         </nav>
     </header>
     <main> 
+
+<style>
+nav {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-right: 2rem;
+}
+.nav-links {
+    display: flex;
+    gap: 2rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.nav-links li {
+    display: inline-block;
+}
+.nav-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+}
+.staff-info {
+    background: #3498db;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 1rem;
+    box-shadow: 0 1px 4px rgba(44,62,80,0.08);
+    letter-spacing: 0.5px;
+    margin-right: 0.5rem;
+}
+.logout-link {
+    background: #e74c3c;
+    color: #fff;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: background 0.2s;
+}
+.logout-link:hover {
+    background: #c0392b;
+}
+@media (max-width: 600px) {
+    nav {
+        flex-direction: column;
+        align-items: flex-start;
+        padding-right: 0;
+    }
+    .nav-right {
+        flex-direction: column;
+        align-items: flex-end;
+        margin-left: 0;
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+    .staff-info {
+        margin-right: 0;
+        margin-bottom: 0.5rem;
+    }
+}
+</style> 
