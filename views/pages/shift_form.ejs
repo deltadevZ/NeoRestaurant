@@ -89,6 +89,48 @@
     margin-top: 2rem;
 }
 
+.cta-button {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: none;
+    text-align: center;
+    transition: all 0.2s ease;
+    min-width: 120px;
+}
+
+.cta-button.primary {
+    background-color: #1a73e8;
+    color: white;
+}
+
+.cta-button.primary:hover {
+    background-color: #1557b0;
+}
+
+.cta-button.secondary {
+    background-color: #6c757d;
+    color: white;
+}
+
+.cta-button.secondary:hover {
+    background-color: #5a6268;
+}
+
+@media (max-width: 768px) {
+    .form-actions {
+        flex-direction: column;
+    }
+
+    .cta-button {
+        width: 100%;
+    }
+}
+
 .error-message {
     background-color: #f8d7da;
     color: #721c24;

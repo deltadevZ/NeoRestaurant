@@ -1,6 +1,149 @@
 <%- include('../partials/header') %>
 <%- include('../partials/staff_nav') %>
 
+<style>
+    .container {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+
+    .dashboard {
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        padding: 2rem;
+    }
+
+    .page-title {
+        color: #1a73e8;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: #333;
+        font-weight: 500;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 1rem;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #1a73e8;
+        box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.2);
+    }
+
+    .order-items {
+        margin: 2rem 0;
+    }
+
+    .order-items h2 {
+        color: #333;
+        margin-bottom: 1rem;
+    }
+
+    .order-item {
+        display: grid;
+        grid-template-columns: 2fr 1fr 2fr auto;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        align-items: center;
+    }
+
+    .order-item select,
+    .order-item input {
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 1rem;
+    }
+
+    .button {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        background-color: #1a73e8;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 1rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        text-align: center;
+        transition: background-color 0.2s;
+    }
+
+    .button:hover {
+        background-color: #1557b0;
+    }
+
+    #addItem {
+        margin-top: 1rem;
+        width: 100%;
+    }
+
+    .remove-item {
+        padding: 0.5rem 1rem;
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .remove-item:hover {
+        background-color: #c82333;
+    }
+
+    .form-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .submit-button {
+        padding: 1rem;
+        background-color: #28a745;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 1.1rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .submit-button:hover {
+        background-color: #218838;
+    }
+
+    .error-message {
+        background-color: #ffebee;
+        color: #c62828;
+        padding: 1rem;
+        border-radius: 5px;
+        margin-bottom: 1.5rem;
+        text-align: center;
+    }
+</style>
+
 <div class="container">
     <div class="dashboard">
         <section>
