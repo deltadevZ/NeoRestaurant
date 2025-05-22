@@ -40,14 +40,18 @@
                             <div class="order-items">
                                 <h4>Items:</h4>
                                 <ul>
-                                    <% order.items.forEach(item => { %>
-                                        <li>
-                                            <%= item.Quantity %>x <%= item.Name %>
-                                            <% if (item.SpecialRequests) { %>
-                                                <p class="special-request">Note: <%= item.SpecialRequests %></p>
-                                            <% } %>
-                                        </li>
-                                    <% }); %>
+                                    <% if (order.items && Array.isArray(order.items) && order.items.length > 0) { %>
+                                        <% order.items.forEach(item => { %>
+                                            <li>
+                                                <%= item.Quantity %>x <%= item.Name %>
+                                                <% if (item.SpecialRequests) { %>
+                                                    <p class="special-request">Note: <%= item.SpecialRequests %></p>
+                                                <% } %>
+                                            </li>
+                                        <% }); %>
+                                    <% } else { %>
+                                        <li>No items found for this order.</li>
+                                    <% } %>
                                 </ul>
                             </div>
 
