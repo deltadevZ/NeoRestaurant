@@ -224,37 +224,60 @@ app.get('/staff/logout', (req, res) => {
 
 // Staff dashboard
 app.get('/staff/dashboard', requireLogin, (req, res) => {
-    const today = new Date().toISOString().split('T')[0];
+    // Get query parameters for messages
+    const success = req.query.success || null;
+    const error = req.query.error || null;
+    const message = req.query.message || null;
+    
+    // Get today's date in local timezone
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    console.log('Loading dashboard for date:', todayStr);
+    
+    // Get the start and end of today in ISO format
+    const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+    const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+    console.log('Date range:', { startOfDay, endOfDay });
     
     db.all(
         `SELECT r.*, c.Name as CustomerName 
         FROM RESERVATIONS r 
         JOIN CUSTOMERS c ON r.CustomerID = c.CustomerID 
-        WHERE date(r.DateTime) = ? 
+        WHERE r.DateTime BETWEEN ? AND ?
         ORDER BY r.DateTime`,
-        [today],
+        [startOfDay, endOfDay],
         (err, reservations) => {
             if (err) {
                 console.error('Error fetching reservations:', err);
                 reservations = [];
             }
 
+            console.log('Fetched reservations:', reservations.length);
+
             db.all(
                 `SELECT o.*, s.Name as StaffName 
                 FROM ORDERS o 
                 JOIN STAFF s ON o.StaffID = s.StaffID 
-                WHERE date(o.OrderDateTime) = ? 
-                ORDER BY o.OrderDateTime`,
-                [today],
+                WHERE o.OrderDateTime BETWEEN ? AND ?
+                ORDER BY o.OrderDateTime DESC`,
+                [startOfDay, endOfDay],
                 (err, orders) => {
                     if (err) {
                         console.error('Error fetching orders:', err);
                         orders = [];
                     }
 
+                    console.log('Fetched orders:', orders.length);
+                    if (orders.length > 0) {
+                        console.log('Sample order data:', orders[0]);
+                    }
+
                     res.render('pages/staff_dashboard', {
                         reservations,
-                        orders
+                        orders,
+                        success,
+                        error,
+                        message
                     });
                 }
             );
@@ -432,8 +455,17 @@ app.get('/staff/order/new', requireLogin, (req, res) => {
                 error: "Could not fetch menu items." 
             });
         }
+        
+        if (menuItems.length === 0) {
+            return res.render('pages/order_form', {
+                order: null,
+                menuItems: [],
+                error: "No menu items available. Please add menu items first."
+            });
+        }
+        
         res.render('pages/order_form', { 
-            order: null, 
+            order: { items: [] }, 
             menuItems, 
             error: null 
         });
@@ -442,35 +474,80 @@ app.get('/staff/order/new', requireLogin, (req, res) => {
 
 // Edit order
 app.get('/staff/order/edit/:order_id', requireLogin, (req, res) => {
+    console.log('Editing order:', req.params.order_id);
+    
     db.get(`
-        SELECT o.*, 
-               GROUP_CONCAT(oi.MenuItemID || ',' || oi.Quantity || ',' || oi.SpecialRequests) as items
+        SELECT o.* 
         FROM ORDERS o
-        LEFT JOIN ORDER_ITEMS oi ON o.OrderID = oi.OrderID
         WHERE o.OrderID = ?
-        GROUP BY o.OrderID
     `, [req.params.order_id], (err, order) => {
         if (err) {
-            console.error(err);
+            console.error('Error fetching order:', err);
             return res.render('pages/order_form', { 
                 order: null, 
                 menuItems: [], 
                 error: "Could not fetch order details." 
             });
         }
-        db.all('SELECT * FROM MENU_ITEMS ORDER BY Category, Name', (err, menuItems) => {
+        
+        if (!order) {
+            console.error('Order not found:', req.params.order_id);
+            return res.render('pages/order_form', { 
+                order: null, 
+                menuItems: [], 
+                error: "Order not found." 
+            });
+        }
+        
+        console.log('Order found:', order);
+        
+        // Get order items separately
+        db.all(`
+            SELECT oi.*, m.Name as MenuItemName, m.Price
+            FROM ORDER_ITEMS oi
+            JOIN MENU_ITEMS m ON oi.MenuItemID = m.MenuItemID
+            WHERE oi.OrderID = ?
+        `, [req.params.order_id], (err, orderItems) => {
             if (err) {
-                console.error(err);
+                console.error('Error fetching order items:', err);
                 return res.render('pages/order_form', { 
-                    order, 
+                    order: null, 
                     menuItems: [], 
-                    error: "Could not fetch menu items." 
+                    error: "Could not fetch order items." 
                 });
             }
-            res.render('pages/order_form', { 
-                order, 
-                menuItems, 
-                error: null 
+            
+            console.log('Order items found:', orderItems);
+            order.items = orderItems.map(item => ({
+                MenuItemID: item.MenuItemID,
+                Quantity: item.Quantity,
+                SpecialRequests: item.SpecialRequests || '',
+                Price: item.Price || 0  // Get price from menu item
+            }));
+            
+            db.all('SELECT * FROM MENU_ITEMS ORDER BY Category, Name', (err, menuItems) => {
+                if (err) {
+                    console.error('Error fetching menu items:', err);
+                    return res.render('pages/order_form', { 
+                        order, 
+                        menuItems: [], 
+                        error: "Could not fetch menu items." 
+                    });
+                }
+                
+                if (menuItems.length === 0) {
+                    return res.render('pages/order_form', {
+                        order,
+                        menuItems: [],
+                        error: "No menu items available. Please add menu items first."
+                    });
+                }
+                
+                res.render('pages/order_form', { 
+                    order, 
+                    menuItems, 
+                    error: null 
+                });
             });
         });
     });
@@ -478,65 +555,174 @@ app.get('/staff/order/edit/:order_id', requireLogin, (req, res) => {
 
 // Save/update order
 app.post('/staff/order/save', requireLogin, (req, res) => {
-    const { tableNumber, status, items } = req.body;
+    console.log('Saving order - Request body:', JSON.stringify(req.body, null, 2));
+    const { tableNumber, status, orderId } = req.body;
+    console.log('Extracted values:', { tableNumber, status, orderId });
     const staffId = req.session.staffId;
+    console.log('Staff ID:', staffId);
+    
+    // Convert items object to array
+    const itemsObj = req.body.items || {};
+    console.log('Items object:', JSON.stringify(itemsObj, null, 2));
+    
+    // Check if items exist
+    if (Object.keys(itemsObj).length === 0) {
+        console.error('No items in the order');
+        return res.redirect('/staff/dashboard?error=no_items');
+    }
+    
+    const items = Object.keys(itemsObj).map(key => {
+        return {
+            menuItemId: itemsObj[key].menuItemId,
+            quantity: itemsObj[key].quantity,
+            specialRequests: itemsObj[key].specialRequests || '',
+            price: itemsObj[key].price
+        };
+    });
+    console.log('Processed items:', JSON.stringify(items, null, 2));
 
     db.serialize(() => {
         db.run('BEGIN TRANSACTION');
 
-        // Insert order
-        db.run(
-            'INSERT INTO ORDERS (StaffID, TableNumber, Status) VALUES (?, ?, ?)',
-            [staffId, tableNumber, status],
-            function(err) {
-                if (err) {
-                    db.run('ROLLBACK');
-                    return res.redirect('/staff/orders');
+        // Update or insert order
+        if (orderId) {
+            // Update existing order
+            console.log('Updating existing order:', orderId);
+            const currentDateTime = new Date().toISOString();
+            db.run(
+                'UPDATE ORDERS SET TableNumber = ?, Status = ?, OrderDateTime = ? WHERE OrderID = ?',
+                [tableNumber, status, currentDateTime, orderId],
+                function(err) {
+                    if (err) {
+                        console.error('Error updating order:', err);
+                        db.run('ROLLBACK');
+                        return res.redirect('/staff/dashboard?error=update_failed');
+                    }
+                    
+                    console.log('Order updated successfully with timestamp:', currentDateTime);
+                    // Delete existing order items
+                    db.run('DELETE FROM ORDER_ITEMS WHERE OrderID = ?', [orderId], (err) => {
+                        if (err) {
+                            console.error('Error deleting order items:', err);
+                            db.run('ROLLBACK');
+                            return res.redirect('/staff/dashboard?error=update_failed');
+                        }
+                        
+                        processOrderItems(orderId, items, 'Order updated successfully');
+                    });
                 }
+            );
+        } else {
+            // Insert new order
+            console.log('Creating new order');
+            const currentDateTime = new Date().toISOString();
+            db.run(
+                'INSERT INTO ORDERS (StaffID, TableNumber, Status, OrderDateTime) VALUES (?, ?, ?, ?)',
+                [staffId, tableNumber, status, currentDateTime],
+                function(err) {
+                    if (err) {
+                        console.error('Error inserting order:', err);
+                        db.run('ROLLBACK');
+                        return res.redirect('/staff/dashboard?error=create_failed');
+                    }
 
-                const orderId = this.lastID;
-                let totalPrice = 0;
+                    const newOrderId = this.lastID;
+                    console.log('New order created with ID:', newOrderId, 'and timestamp:', currentDateTime);
+                    processOrderItems(newOrderId, items, 'Order created successfully');
+                }
+            );
+        }
 
-                // Insert order items
-                const insertItems = items.map(item => {
-                    return new Promise((resolve, reject) => {
-                        const subtotal = item.price * item.quantity;
+        // Helper function to process order items and complete the transaction
+        function processOrderItems(currentOrderId, orderItems, successMessage) {
+            let totalPrice = 0;
+
+            // Insert order items
+            const insertItems = orderItems.map(item => {
+                return new Promise((resolve, reject) => {
+                    try {
+                        // Validate item data
+                        if (!item.menuItemId) {
+                            throw new Error(`Missing menuItemId for item: ${JSON.stringify(item)}`);
+                        }
+                        if (!item.quantity) {
+                            throw new Error(`Missing quantity for item: ${JSON.stringify(item)}`);
+                        }
+                        if (!item.price) {
+                            throw new Error(`Missing price for item: ${JSON.stringify(item)}`);
+                        }
+                        
+                        const menuItemId = parseInt(item.menuItemId);
+                        const quantity = parseInt(item.quantity);
+                        const price = parseFloat(item.price);
+                        const specialRequests = item.specialRequests || '';
+                        
+                        if (isNaN(menuItemId) || menuItemId <= 0) {
+                            throw new Error(`Invalid menuItemId: ${item.menuItemId}`);
+                        }
+                        if (isNaN(quantity) || quantity <= 0) {
+                            throw new Error(`Invalid quantity: ${item.quantity}`);
+                        }
+                        if (isNaN(price) || price < 0) {
+                            throw new Error(`Invalid price: ${item.price}`);
+                        }
+                        
+                        const subtotal = price * quantity;
                         totalPrice += subtotal;
 
+                        console.log('Inserting order item:', {
+                            orderId: currentOrderId,
+                            menuItemId,
+                            quantity,
+                            specialRequests,
+                            subtotal
+                        });
+
+                        // Remove the Price column from the insertion
                         db.run(
                             'INSERT INTO ORDER_ITEMS (OrderID, MenuItemID, Quantity, SpecialRequests, Subtotal) VALUES (?, ?, ?, ?, ?)',
-                            [orderId, item.menuItemId, item.quantity, item.specialRequests, subtotal],
-                            (err) => {
-                                if (err) reject(err);
-                                else resolve();
-                            }
-                        );
-                    });
-                });
-
-                Promise.all(insertItems)
-                    .then(() => {
-                        // Update order total
-                        db.run(
-                            'UPDATE ORDERS SET TotalPrice = ? WHERE OrderID = ?',
-                            [totalPrice, orderId],
+                            [currentOrderId, menuItemId, quantity, specialRequests, subtotal],
                             (err) => {
                                 if (err) {
-                                    db.run('ROLLBACK');
-                                    return res.redirect('/staff/orders');
+                                    console.error('Error inserting order item:', err);
+                                    reject(err);
+                                } else {
+                                    resolve();
                                 }
-                                db.run('COMMIT');
-                                res.redirect('/staff/orders');
                             }
                         );
-                    })
-                    .catch(err => {
-                        console.error('Error inserting order items:', err);
-                        db.run('ROLLBACK');
-                        res.redirect('/staff/orders');
-                    });
-            }
-        );
+                    } catch (error) {
+                        console.error('Error processing order item:', error);
+                        reject(error);
+                    }
+                });
+            });
+
+            Promise.all(insertItems)
+                .then(() => {
+                    // Update order total
+                    console.log('All items processed, updating order total:', totalPrice);
+                    db.run(
+                        'UPDATE ORDERS SET TotalPrice = ? WHERE OrderID = ?',
+                        [totalPrice, currentOrderId],
+                        (err) => {
+                            if (err) {
+                                console.error('Error updating order total:', err);
+                                db.run('ROLLBACK');
+                                return res.redirect('/staff/dashboard?error=total_update_failed');
+                            }
+                            console.log('Transaction committed, redirecting to dashboard');
+                            db.run('COMMIT');
+                            res.redirect(`/staff/dashboard?success=${encodeURIComponent(successMessage)}`);
+                        }
+                    );
+                })
+                .catch(err => {
+                    console.error('Error inserting order items:', err);
+                    db.run('ROLLBACK');
+                    res.redirect(`/staff/dashboard?error=items_failed&message=${encodeURIComponent(err.message)}`);
+                });
+        }
     });
 });
 
@@ -1081,6 +1267,48 @@ app.post('/staff/schedule/assign', requireLogin, (req, res) => {
                 // No existing shifts, proceed with assignment
                 assignStaffToShift(staff_id, shift_id, res);
             }
+        }
+    );
+});
+
+// Temporary route to check database schema
+app.get('/debug/schema', (req, res) => {
+    db.all("SELECT sql FROM sqlite_master WHERE type='table'", (err, tables) => {
+        if (err) {
+            return res.send('Error fetching schema: ' + err.message);
+        }
+        
+        // Get a sample order to check data
+        db.get("SELECT * FROM ORDERS LIMIT 1", (err, order) => {
+            let orderData = err ? 'Error: ' + err.message : order;
+            
+            res.send(`
+                <h1>Database Schema</h1>
+                <pre>${JSON.stringify(tables, null, 2)}</pre>
+                <h2>Sample Order</h2>
+                <pre>${JSON.stringify(orderData, null, 2)}</pre>
+            `);
+        });
+    });
+});
+
+// Update order status directly
+app.post('/staff/order/update_status/:order_id', requireLogin, (req, res) => {
+    const { status } = req.body;
+    const orderId = req.params.order_id;
+    const currentDateTime = new Date().toISOString();
+
+    console.log('Updating order status:', { orderId, status, currentDateTime });
+
+    db.run(
+        'UPDATE ORDERS SET Status = ?, OrderDateTime = ? WHERE OrderID = ?',
+        [status, currentDateTime, orderId],
+        (err) => {
+            if (err) {
+                console.error('Error updating order status:', err);
+                return res.redirect('/staff/dashboard?error=status_update_failed');
+            }
+            res.redirect(`/staff/dashboard?success=${encodeURIComponent('Order status updated to ' + status)}`);
         }
     );
 });

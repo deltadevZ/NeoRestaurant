@@ -4,6 +4,37 @@
 <div class="dashboard">
     <h1>Staff Dashboard</h1>
     
+    <% if (typeof success !== 'undefined' && success) { %>
+        <div class="success-message">
+            <%= success %>
+        </div>
+    <% } %>
+    
+    <% if (typeof error !== 'undefined' && error) { %>
+        <div class="error-message">
+            <% if (error === 'update_failed') { %>
+                Failed to update order. Please try again.
+            <% } else if (error === 'create_failed') { %>
+                Failed to create order. Please try again.
+            <% } else if (error === 'total_update_failed') { %>
+                Failed to update order total. Please try again.
+            <% } else if (error === 'items_failed') { %>
+                Failed to process order items. 
+                <% if (typeof message !== 'undefined' && message) { %>
+                    Error: <%= message %>
+                <% } else { %>
+                    Please try again.
+                <% } %>
+            <% } else if (error === 'status_update_failed') { %>
+                Failed to update order status. Please try again.
+            <% } else if (error === 'no_items') { %>
+                Cannot save an order with no items. Please add at least one item.
+            <% } else { %>
+                <%= error %>
+            <% } %>
+        </div>
+    <% } %>
+    
     <section class="today-reservations">
         <h2>Today's Reservations</h2>
         <% if (reservations.length === 0) { %>
@@ -64,7 +95,18 @@
                         <tr>
                             <td><%= new Date(order.OrderDateTime).toLocaleTimeString() %></td>
                             <td><%= order.TableNumber %></td>
-                            <td><%= order.Status %></td>
+                            <td>
+                                <form action="/staff/order/update_status/<%= order.OrderID %>" method="POST" style="margin: 0;">
+                                    <select name="status" onchange="this.form.submit()">
+                                        <option value="Placed" <%= order.Status === 'Placed' ? 'selected' : '' %>>Placed</option>
+                                        <option value="Preparing" <%= order.Status === 'Preparing' ? 'selected' : '' %>>Preparing</option>
+                                        <option value="Ready for Service" <%= order.Status === 'Ready for Service' ? 'selected' : '' %>>Ready for Service</option>
+                                        <option value="Served" <%= order.Status === 'Served' ? 'selected' : '' %>>Served</option>
+                                        <option value="Paid" <%= order.Status === 'Paid' ? 'selected' : '' %>>Paid</option>
+                                        <option value="Cancelled" <%= order.Status === 'Cancelled' ? 'selected' : '' %>>Cancelled</option>
+                                    </select>
+                                </form>
+                            </td>
                             <td>$<%= order.TotalPrice.toFixed(2) %></td>
                             <td>
                                 <a href="/staff/order/edit/<%= order.OrderID %>" class="button">Edit</a>
@@ -80,5 +122,25 @@
         </div>
     </section>
 </div>
+
+<style>
+.success-message {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.error-message {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 1rem;
+    border-radius: 5px;
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+</style>
 
 <%- include('../partials/footer') %> 

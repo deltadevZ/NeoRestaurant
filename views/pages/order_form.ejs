@@ -156,6 +156,9 @@
             <% } %>
 
             <form action="/staff/order/save" method="POST" id="orderForm">
+                <% if (order && order.OrderID) { %>
+                    <input type="hidden" name="orderId" value="<%= order.OrderID %>">
+                <% } %>
                 <div class="form-group">
                     <label for="tableNumber">Table Number:</label>
                     <input type="number" id="tableNumber" name="tableNumber" value="<%= order ? order.TableNumber : '' %>" required min="1" max="20">
@@ -201,7 +204,7 @@
 
                 <div class="form-actions">
                     <button type="submit" class="submit-button">Save Order</button>
-                    <a href="/staff/orders" class="button">Cancel</a>
+                    <a href="/staff/dashboard" class="button">Cancel</a>
                 </div>
             </form>
         </section>
@@ -212,10 +215,23 @@
 document.addEventListener('DOMContentLoaded', function() {
     const itemsContainer = document.getElementById('itemsContainer');
     const addItemButton = document.getElementById('addItem');
-    const menuItems = <%- JSON.stringify(menuItems) %>;
+    const menuItems = <%- JSON.stringify(menuItems || []) %>;
     let itemCount = <%= order && order.items ? order.items.length : 0 %>;
 
+    // Disable add item button if no menu items
+    if (menuItems.length === 0) {
+        if (addItemButton) {
+            addItemButton.disabled = true;
+            addItemButton.classList.add('disabled');
+            addItemButton.title = 'No menu items available';
+        }
+    }
+
     function createItemElement() {
+        if (menuItems.length === 0) {
+            return document.createElement('div');
+        }
+        
         const div = document.createElement('div');
         div.className = 'order-item';
         div.innerHTML = `
@@ -247,10 +263,20 @@ document.addEventListener('DOMContentLoaded', function() {
         return div;
     }
 
-    addItemButton.addEventListener('click', function() {
+    // Auto-add first item if this is a new order and no items exist
+    if (menuItems.length > 0 && itemCount === 0) {
         itemsContainer.appendChild(createItemElement());
         itemCount++;
-    });
+    }
+
+    if (addItemButton) {
+        addItemButton.addEventListener('click', function() {
+            if (menuItems.length > 0) {
+                itemsContainer.appendChild(createItemElement());
+                itemCount++;
+            }
+        });
+    }
 
     // Add event listeners to existing remove buttons
     document.querySelectorAll('.remove-item').forEach(button => {
@@ -265,6 +291,14 @@ document.addEventListener('DOMContentLoaded', function() {
             const price = this.options[this.selectedIndex].dataset.price;
             this.parentElement.querySelector('input[name$="[price]"]').value = price;
         });
+    });
+    
+    // Add form validation to ensure at least one item exists
+    document.getElementById('orderForm').addEventListener('submit', function(e) {
+        if (itemsContainer.children.length === 0) {
+            e.preventDefault();
+            alert('Please add at least one item to the order.');
+        }
     });
 });
 </script>
