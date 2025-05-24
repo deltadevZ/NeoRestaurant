@@ -26,4 +26,10 @@ Thumbs.db
 
 # Logs
 logs
-*.log 
+*.log
+
+# Demo data scripts
+clear_demo_data.js
+check_order.js
+add_order_items.js
+fix_order.js 

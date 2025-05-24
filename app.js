@@ -745,31 +745,69 @@ app.get('/staff/menu', requireLogin, (req, res) => {
 
 // Kitchen display
 app.get('/staff/kitchen', requireLogin, (req, res) => {
+    // First, get all active orders
     db.all(`
-        SELECT o.*, s.Name as StaffName,
-               GROUP_CONCAT(m.Name || ' (x' || oi.Quantity || ')' || 
-                           CASE WHEN oi.SpecialRequests IS NOT NULL 
-                                THEN ' - Note: ' || oi.SpecialRequests 
-                                ELSE '' END) as items
+        SELECT o.*, s.Name as StaffName
         FROM ORDERS o
         LEFT JOIN STAFF s ON o.StaffID = s.StaffID
-        LEFT JOIN ORDER_ITEMS oi ON o.OrderID = oi.OrderID
-        LEFT JOIN MENU_ITEMS m ON oi.MenuItemID = m.MenuItemID
-        WHERE o.Status IN ('Placed', 'Ready for Kitchen', 'Preparing')
-        GROUP BY o.OrderID
+        WHERE o.Status IN ('Placed', 'Ready for Kitchen', 'Preparing', 'Ready for Service')
         ORDER BY o.OrderDateTime ASC
     `, (err, orders) => {
         if (err) {
-            console.error(err);
+            console.error('Error fetching orders:', err);
             return res.render('pages/kitchen_display', { 
                 orders: [], 
                 error: "Could not fetch orders." 
             });
         }
-        res.render('pages/kitchen_display', { 
-            orders, 
-            error: null 
+        
+        console.log(`Found ${orders.length} active orders`);
+        
+        // If no orders, render page early
+        if (orders.length === 0) {
+            return res.render('pages/kitchen_display', { 
+                orders: [], 
+                error: null 
+            });
+        }
+        
+        // For each order, get its items
+        const promises = orders.map(order => {
+            return new Promise((resolve, reject) => {
+                db.all(`
+                    SELECT oi.*, m.Name, m.Description, m.Category
+                    FROM ORDER_ITEMS oi
+                    JOIN MENU_ITEMS m ON oi.MenuItemID = m.MenuItemID
+                    WHERE oi.OrderID = ?
+                `, [order.OrderID], (err, items) => {
+                    if (err) {
+                        console.error(`Error fetching items for order #${order.OrderID}:`, err);
+                        order.items = [];
+                        return resolve(order);
+                    }
+                    
+                    console.log(`Order #${order.OrderID} has ${items.length} items`);
+                    order.items = items;
+                    resolve(order);
+                });
+            });
         });
+        
+        // Wait for all orders to be processed
+        Promise.all(promises)
+            .then(ordersWithItems => {
+                res.render('pages/kitchen_display', { 
+                    orders: ordersWithItems, 
+                    error: null 
+                });
+            })
+            .catch(err => {
+                console.error('Error processing orders:', err);
+                res.render('pages/kitchen_display', { 
+                    orders: [], 
+                    error: "An error occurred while processing orders." 
+                });
+            });
     });
 });
 

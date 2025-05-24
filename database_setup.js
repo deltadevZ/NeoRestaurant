@@ -97,6 +97,14 @@ const createTables = () => {
             ManagerApprovalStatus TEXT NOT NULL DEFAULT 'Pending' CHECK(ManagerApprovalStatus IN ('Pending', 'Approved', 'Denied')),
             FOREIGN KEY(StaffID) REFERENCES STAFF(StaffID),
             FOREIGN KEY(ShiftID) REFERENCES SHIFTS(ShiftID)
+        )`,
+        `CREATE TABLE IF NOT EXISTS MENU_ITEM_INGREDIENTS (
+            MenuItemIngredientID INTEGER PRIMARY KEY AUTOINCREMENT,
+            MenuItemID INTEGER NOT NULL,
+            InventoryItemID INTEGER NOT NULL,
+            QuantityRequired REAL NOT NULL,
+            FOREIGN KEY(MenuItemID) REFERENCES MENU_ITEMS(MenuItemID),
+            FOREIGN KEY(InventoryItemID) REFERENCES INVENTORY_ITEMS(ItemID)
         )`
     ];
 
@@ -146,6 +154,23 @@ const insertSampleData = () => {
         ['Premium Meats', 'Mike Johnson', '555-0103', 'mike@premiummeats.com']
     ];
 
+    // Sample menu item ingredients
+    const menuItemIngredients = [
+        // Caesar Salad ingredients
+        [1, 1, 1], // 1 Romaine Lettuce for Caesar Salad
+        [1, 2, 0.1], // 0.1 bottle of Olive Oil for Caesar Salad
+        
+        // Grilled Salmon ingredients
+        [3, 3, 1], // 1 Salmon Fillet for Grilled Salmon
+        [3, 2, 0.05], // 0.05 bottle of Olive Oil for Grilled Salmon
+        
+        // Beef Steak ingredients
+        [4, 4, 1], // 1 Beef Steak for Beef Steak menu item
+        
+        // Chocolate Cake ingredients
+        [5, 5, 0.2] // 0.2 kg of Chocolate for Chocolate Cake
+    ];
+
     return Promise.all([
         // Insert staff
         ...staffData.map(staff => {
@@ -192,6 +217,19 @@ const insertSampleData = () => {
                 db.run(
                     'INSERT OR IGNORE INTO INVENTORY_ITEMS (ItemName, Description, QuantityOnHand, Unit, ReorderLevel) VALUES (?, ?, ?, ?, ?)',
                     item,
+                    (err) => {
+                        if (err) reject(err);
+                        else resolve();
+                    }
+                );
+            });
+        }),
+        // Insert menu item ingredients
+        ...menuItemIngredients.map(ingredient => {
+            return new Promise((resolve, reject) => {
+                db.run(
+                    'INSERT OR IGNORE INTO MENU_ITEM_INGREDIENTS (MenuItemID, InventoryItemID, QuantityRequired) VALUES (?, ?, ?)',
+                    ingredient,
                     (err) => {
                         if (err) reject(err);
                         else resolve();
